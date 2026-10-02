@@ -23,11 +23,7 @@
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
 font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 body{max-width:520px;margin:auto;min-height:100vh}
-button,input,textarea,select{font:inherit}button{cursor:pointer}
-/* Espaço para a barra de status do iPhone não cobrir o cabeçalho */
 .app{padding:calc(env(safe-area-inset-top,0px) + 10px) 12px calc(env(safe-area-inset-bottom,0px) + 22px)}
-
-/* Cabeçalho compacto */
 .forms-header{
  display:flex;align-items:center;gap:9px;
  background:linear-gradient(135deg,#0d4f83,#1769aa 55%,#258bd0);
@@ -38,7 +34,6 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 display:grid;place-items:center;font-size:17px;flex:0 0 auto}
 .forms-title{font-size:15px;font-weight:900;line-height:1.1}
 .forms-subtitle{font-size:10px;margin-top:1px;opacity:.88}
-
 .card{
 background:var(--panel);border:1px solid var(--line);border-radius:17px;
 padding:13px;margin-bottom:10px;box-shadow:0 5px 17px var(--shadow)
@@ -51,7 +46,6 @@ input,textarea,select{
 width:100%;max-width:100%;min-width:0;border:1.4px solid var(--line);background:#fbfdff;color:var(--text);
 border-radius:11px;padding:10px 11px;outline:none
 }
-/* Corrige o campo de data que passava da borda no iPhone */
 input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-height:44px;text-align:left}
 input[type=date]::-webkit-date-and-time-value{text-align:left}
 input:focus,textarea:focus,select:focus{
@@ -74,8 +68,6 @@ width:42px;border:1px solid var(--line);border-radius:10px;
 background:var(--panel2);color:var(--blue);font-weight:900
 }
 #photoInput{display:none}
-
-/* Barra única de ações: 3 + 2 */
 .action-grid{
 display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:11px
 }
@@ -96,7 +88,6 @@ display:flex;align-items:center;justify-content:center;gap:4px;padding:0 5px
 .status{min-height:19px;margin-top:7px;text-align:center;color:var(--blue);font-weight:750;font-size:12px}
 .previews{display:flex;gap:7px;overflow:auto;margin-top:7px}
 .previews img{width:58px;height:58px;object-fit:cover;border-radius:9px;border:1px solid var(--line)}
-
 .records-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .count{min-width:28px;height:28px;border-radius:14px;background:#e3eff9;color:var(--blue);
 display:grid;place-items:center;font-weight:900}
@@ -158,6 +149,8 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <option value="Avariado">Avariado</option>
 <option value="Medidor caído">Medidor caído</option>
 <option value="Necessita tábua de fixação">Necessita tábua de fixação</option>
+<option value="Borne derretido">Borne derretido</option>
+<option value="Mono 240">Mono 240</option>
 </select>
 
 <label for="data">Data</label>
@@ -203,8 +196,6 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-/* IMPORTANTE: chave preservada para não perder os dados existentes. */
-/* Aumente a versão a cada alteração enviada ao GitHub */
 const APP_VERSION='1.5',APP_DATE='26/09/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
@@ -341,20 +332,16 @@ function shareApp(){
   try{prompt('Copie o link do aplicativo:',window.location.href)}catch(_){}
  }
 }
-
 $('medidor').addEventListener('focus',()=>{
  $('medidor').setAttribute('inputmode','text');$('medidor').setAttribute('type','search')
 });
 $('etapa').addEventListener('change',e=>{stage=Number(e.target.value);renderRecords()});
 $('situacao').addEventListener('change',e=>setSituation(e.target.value));
 $('addReading').onclick=()=>{readings.push('');renderReadings()};
-
-/* Foto: câmera */
 $('cameraBtn').onclick=()=>{
  $('photoInput').setAttribute('capture','environment');
  $('photoInput').click()
 };
-/* Galeria: sem capture para permitir seleção da biblioteca */
 $('galleryBtn').onclick=()=>{
  $('photoInput').removeAttribute('capture');
  $('photoInput').click()
@@ -365,8 +352,6 @@ $('photoInput').onchange=e=>{
 };
 $('exportBtn').onclick=exportCSV;
 $('shareBtn').onclick=shareApp;
-
-/* Atualizar: busca a versão publicada sem cache e recarrega se houver nova */
 async function updateApp(){
  const st=$('status');st.style.color='var(--blue)';st.textContent='Verificando atualização...';
  try{
@@ -391,7 +376,6 @@ $('previews').addEventListener('click',ev=>{
  if(!confirm('Remover esta foto?'))return;
  selectedFotos.splice(Number(img.dataset.i),1);renderPhotos()
 });
-
 $('saveBtn').onclick=()=>{
  const apontadoPor=$('apontador').value.trim(),codigo=$('codigo').value.trim(),medidor=$('medidor').value.trim(),
  leituras=readings.map(x=>x.trim()).filter(Boolean);
@@ -419,7 +403,6 @@ $('saveBtn').onclick=()=>{
  saveData();resetForm();renderRecords();
  $('status').textContent=`Registro salvo na Etapa ${stage}.`;$('status').style.color='var(--blue)'
 };
-
 $('versionTag').textContent=`Versão ${APP_VERSION} · ${APP_DATE}`;
 try{$('apontador').value=localStorage.getItem(KEY_APONTADOR)||''}catch(e){}
 $('apontador').addEventListener('input',e=>{try{localStorage.setItem(KEY_APONTADOR,e.target.value.trim())}catch(_){}});
