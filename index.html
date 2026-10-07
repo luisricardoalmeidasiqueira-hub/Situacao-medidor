@@ -61,6 +61,7 @@ width:39px;height:42px;border:1px solid var(--line);background:var(--panel2);
 color:var(--blue);border-radius:11px;font-size:20px;font-weight:900;flex:0 0 auto
 }
 .stage-row select{height:42px;font-weight:800;flex:1}
+.addr-row{display:flex;gap:7px}.addr-street{flex:1;min-width:0}.addr-num{width:88px;flex:0 0 auto}
 .reading-row{display:flex;gap:7px;margin-bottom:7px}
 .reading-row input{flex:1}
 .icon-btn{
@@ -134,6 +135,13 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <label for="codigo">Código do cliente <span class="req">*</span></label>
 <input id="codigo" inputmode="numeric" autocomplete="off" placeholder="Digite o código">
 
+<div class="addr-row">
+<div class="addr-street"><label for="endereco">Endereço</label>
+<input id="endereco" type="text" autocomplete="off" autocapitalize="words" placeholder="Rua, avenida..."></div>
+<div class="addr-num"><label for="numero">Nº</label>
+<input id="numero" type="text" inputmode="text" autocomplete="off" placeholder="Nº"></div>
+</div>
+
 <label for="medidor">Número do medidor <span class="req">*</span></label>
 <input id="medidor" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Digite o número do medidor">
 
@@ -151,6 +159,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <option value="Necessita tábua de fixação">Necessita tábua de fixação</option>
 <option value="Borne derretido">Borne derretido</option>
 <option value="Mono 240">Mono 240</option>
+<option value="Medidor carbonizado">Medidor carbonizado</option>
 </select>
 
 <label for="data">Data</label>
@@ -196,7 +205,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='1.6',APP_DATE='02/10/2026';
+const APP_VERSION='1.8',APP_DATE='07/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -259,7 +268,7 @@ async function addPhotos(files){
  renderPhotos()
 }
 function resetForm(){
- $('codigo').value='';$('medidor').value='';readings=[''];renderReadings();
+ $('codigo').value='';$('endereco').value='';$('numero').value='';$('medidor').value='';readings=[''];renderReadings();
  setSituation('');$('data').value=todayStr();$('obs').value='';
  selectedFotos=[];renderPhotos();
  editingId=null;$('editBanner').classList.remove('show');$('formCard').classList.remove('editing')
@@ -270,6 +279,7 @@ function renderRecords(){
  if(!filtered.length){$('records').innerHTML='<div class="empty">Nenhum registro nesta etapa.</div>';return}
  $('records').innerHTML=filtered.map(e=>`<article class="record ${e.resolvido?'resolved':''}">
  <div class="record-top"><div class="code">${esc(e.codigo)}</div><div class="date">${esc(fmtDate(e.data))}</div></div>
+ ${(e.endereco||e.numero)?`<div class="meta">📍 <strong>${esc(fmtEndereco(e))}</strong></div>`:''}
  <div class="meta">Medidor <strong>${esc(e.medidor)}</strong> · <span class="${e.resolvido?'good':'bad'}">${esc(e.situacao)}</span> · Etapa ${esc(e.etapa)}</div>
  <div class="meta">Leitura: <strong>${esc((e.leituras||[]).length?(e.leituras||[]).join(' / '):'—')}</strong></div>
  <div class="meta">Apontado por: <strong>${esc(e.apontadoPor||'—')}</strong></div>
@@ -285,7 +295,7 @@ function renderRecords(){
 window.editEntry=id=>{
  const e=entries.find(x=>x.id===id);if(!e)return;
  editingId=id;
- $('codigo').value=e.codigo||'';$('medidor').value=e.medidor||'';
+ $('codigo').value=e.codigo||'';$('endereco').value=e.endereco||'';$('numero').value=e.numero||'';$('medidor').value=e.medidor||'';
  readings=(e.leituras&&e.leituras.length)?e.leituras.slice():[''];renderReadings();
  setSituation(e.situacao||'');$('data').value=e.data||todayStr();$('obs').value=e.obs||'';
  selectedFotos=(e.fotos||[]).slice();renderPhotos();
@@ -305,12 +315,13 @@ window.toggleResolved=id=>{
  e.resolvido=!e.resolvido;e.resolvidoEm=e.resolvido?Date.now():null;
  saveData();renderRecords()
 }
+function fmtEndereco(e){return [e.endereco||'',e.numero?('nº '+e.numero):''].filter(Boolean).join(', ')}
 function csvCell(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
 function exportCSV(){
  if(!entries.length){alert('Não há registros para exportar.');return}
- const rows=[['Código do cliente','Número do medidor','Leituras','Situação','Etapa','Data','Lançado em','Observações','Qtd. fotos','Status','Resolvido em','Apontado por','Editado em','Editado por'],
+ const rows=[['Código do cliente','Endereço','Número','Número do medidor','Leituras','Situação','Etapa','Data','Lançado em','Observações','Qtd. fotos','Status','Resolvido em','Apontado por','Editado em','Editado por'],
  ...entries.slice().sort((a,b)=>(Number(a.etapa)-Number(b.etapa))||(b.criadoEm-a.criadoEm))
- .map(e=>[e.codigo,e.medidor,(e.leituras||[]).join(' / '),e.situacao,e.etapa,fmtDate(e.data),fmtDateTime(e.criadoEm),
+ .map(e=>[e.codigo,e.endereco||'',e.numero||'',e.medidor,(e.leituras||[]).join(' / '),e.situacao,e.etapa,fmtDate(e.data),fmtDateTime(e.criadoEm),
  e.obs||'',(e.fotos||[]).length,e.resolvido?'Resolvido':'Pendente',e.resolvidoEm?fmtDateTime(e.resolvidoEm):'',e.apontadoPor||'',e.editadoEm?fmtDateTime(e.editadoEm):'',e.editadoPor||''])];
  const csv='\uFEFF'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),a=document.createElement('a');
@@ -377,7 +388,7 @@ $('previews').addEventListener('click',ev=>{
  selectedFotos.splice(Number(img.dataset.i),1);renderPhotos()
 });
 $('saveBtn').onclick=()=>{
- const apontadoPor=$('apontador').value.trim(),codigo=$('codigo').value.trim(),medidor=$('medidor').value.trim(),
+ const apontadoPor=$('apontador').value.trim(),codigo=$('codigo').value.trim(),endereco=$('endereco').value.trim(),numero=$('numero').value.trim(),medidor=$('medidor').value.trim(),
  leituras=readings.map(x=>x.trim()).filter(Boolean);
  if(!apontadoPor||!codigo||!medidor||!selectedSituacao){
   $('status').textContent='Preencha os campos obrigatórios: apontado por, código, medidor e situação.';
@@ -386,7 +397,7 @@ $('saveBtn').onclick=()=>{
  if(editingId){
   const e=entries.find(x=>x.id===editingId);
   if(e){
-   Object.assign(e,{codigo,medidor,leituras,situacao:selectedSituacao,etapa:stage,
+   Object.assign(e,{codigo,endereco,numero,medidor,leituras,situacao:selectedSituacao,etapa:stage,
    data:$('data').value||todayStr(),obs:$('obs').value.trim(),fotos:selectedFotos.slice(),
    editadoEm:Date.now(),editadoPor:apontadoPor});
    if(!e.apontadoPor)e.apontadoPor=apontadoPor;
@@ -396,7 +407,7 @@ $('saveBtn').onclick=()=>{
  }
  entries.push({
   id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),
-  codigo,medidor,leituras,situacao:selectedSituacao,etapa:stage,apontadoPor,
+  codigo,endereco,numero,medidor,leituras,situacao:selectedSituacao,etapa:stage,apontadoPor,
   data:$('data').value||todayStr(),obs:$('obs').value.trim(),
   fotos:selectedFotos.slice(),resolvido:false,resolvidoEm:null,criadoEm:Date.now()
  });
