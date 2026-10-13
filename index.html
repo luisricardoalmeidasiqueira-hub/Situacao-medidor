@@ -68,7 +68,19 @@ color:var(--blue);border-radius:11px;font-size:20px;font-weight:900;flex:0 0 aut
 width:42px;border:1px solid var(--line);border-radius:10px;
 background:var(--panel2);color:var(--blue);font-weight:900
 }
-#photoInput{display:none}
+#photoInput,#pdaInput{display:none}
+.pda-btn{width:100%;height:50px;margin-top:12px;border:0;border-radius:13px;
+background:linear-gradient(135deg,#0d4f83,#1769aa);color:#fff;font-weight:900;font-size:14.5px;
+display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 5px 14px rgba(23,105,170,.2)}
+.pda-btn:disabled{opacity:.7}
+.pda-bar{height:5px;border-radius:3px;background:var(--panel2);margin-top:7px;overflow:hidden;display:none}
+.pda-bar.show{display:block}
+.pda-bar div{height:100%;width:0;background:var(--blue);transition:width .2s}
+.pda-raw{margin-top:7px;font-size:12px;color:var(--muted)}
+.pda-raw summary{cursor:pointer;font-weight:800}
+.pda-raw pre{white-space:pre-wrap;word-break:break-word;background:var(--panel2);border:1px solid var(--line);
+border-radius:10px;padding:8px;margin:6px 0 0;font-size:11.5px;color:var(--text);max-height:220px;overflow:auto}
+input.auto-filled{background:#fff8e1;border-color:#f0c96a}
 .action-grid{
 display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:11px
 }
@@ -131,6 +143,12 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <label for="apontador">Apontado por <span class="req">*</span></label>
 <input id="apontador" type="text" autocomplete="name" autocapitalize="words" placeholder="Seu nome ou prontuário">
 <div class="hint">Fica salvo no aparelho, não precisa digitar toda vez.</div>
+
+<button class="pda-btn" id="pdaBtn" type="button">📟 Ler tela do PDA</button>
+<input id="pdaInput" type="file" accept="image/*" capture="environment">
+<div class="pda-bar" id="pdaBar"><div id="pdaBarFill"></div></div>
+<div class="hint" id="pdaHint">Tire a foto da tela do PDA e o app preenche código (UC), endereço, nº e medidor (MD). A foto não fica salva. Os campos em amarelo foram lidos dela, então confira antes de salvar.</div>
+<details class="pda-raw" id="pdaRaw" style="display:none"><summary>Ver texto lido da foto</summary><pre id="pdaText"></pre></details>
 
 <label for="codigo">Código do cliente <span class="req">*</span></label>
 <input id="codigo" inputmode="numeric" autocomplete="off" placeholder="Digite o código">
@@ -205,7 +223,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='1.8',APP_DATE='07/10/2026';
+const APP_VERSION='2.3',APP_DATE='13/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -270,7 +288,7 @@ async function addPhotos(files){
 function resetForm(){
  $('codigo').value='';$('endereco').value='';$('numero').value='';$('medidor').value='';readings=[''];renderReadings();
  setSituation('');$('data').value=todayStr();$('obs').value='';
- selectedFotos=[];renderPhotos();
+ selectedFotos=[];renderPhotos();clearAutoFill();
  editingId=null;$('editBanner').classList.remove('show');$('formCard').classList.remove('editing')
 }
 function renderRecords(){
@@ -381,6 +399,175 @@ async function updateApp(){
  }
 }
 $('updateBtn').onclick=updateApp;
+
+/* ===== Leitura da tela do PDA (OCR) ===== */
+let ocrWorker=null,ocrPass=0;
+function loadScript(src){return new Promise((ok,err)=>{const sc=document.createElement('script');sc.src=src;sc.onload=ok;sc.onerror=err;document.head.appendChild(sc)})}
+function setPdaProgress(p){$('pdaBar').classList.add('show');$('pdaBarFill').style.width=Math.round(p*100)+'%'}
+async function getWorker(){
+ if(ocrWorker)return ocrWorker;
+ if(!window.Tesseract)await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+ ocrWorker=await Tesseract.createWorker('por',1,{logger:m=>{
+  if(m.status==='recognizing text')setPdaProgress(.2+(ocrPass+m.progress)*.4);
+  else if(m.progress!=null)setPdaProgress(m.progress*.2)
+ }});
+ try{await ocrWorker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'})}catch(_){}
+ return ocrWorker
+}
+function prepImage(file,maxSide=3200,k=10){
+ return new Promise((ok,err)=>{
+  const url=URL.createObjectURL(file),img=new Image();
+  img.onload=()=>{
+   const scale=Math.min(2,maxSide/Math.max(img.width,img.height))||1,c=document.createElement('canvas');
+   const W=c.width=Math.round(img.width*scale),H=c.height=Math.round(img.height*scale);
+   const g=c.getContext('2d');g.drawImage(img,0,0,W,H);
+   const d=g.getImageData(0,0,W,H),px=d.data,lum=new Float32Array(W*H),S=new Float64Array((W+1)*(H+1));
+   for(let i=0,j=0;i<px.length;i+=4,j++)lum[j]=.299*px[i]+.587*px[i+1]+.114*px[i+2];
+   for(let y=0;y<H;y++){let row=0;for(let x=0;x<W;x++){row+=lum[y*W+x];S[(y+1)*(W+1)+x+1]=S[y*(W+1)+x+1]+row}}
+   const r=Math.max(8,Math.round(W/44));
+   for(let y=0;y<H;y++){
+    const y0=Math.max(0,y-r),y1=Math.min(H,y+r+1);
+    for(let x=0;x<W;x++){
+     const x0=Math.max(0,x-r),x1=Math.min(W,x+r+1);
+     const mean=(S[y1*(W+1)+x1]-S[y0*(W+1)+x1]-S[y1*(W+1)+x0]+S[y0*(W+1)+x0])/((x1-x0)*(y1-y0));
+     const v=lum[y*W+x]<mean-k?0:255,i=(y*W+x)*4;px[i]=px[i+1]=px[i+2]=v
+    }
+   }
+   g.putImageData(d,0,0);URL.revokeObjectURL(url);ok(c)
+  };
+  img.onerror=err;img.src=url
+ })
+}
+function cleanNum(v){return String(v||'').replace(/[Oo]/g,'0').replace(/[Il|]/g,'1').replace(/[^0-9A-Z.\-\/]/gi,'').replace(/^[.\-\/]+|[.\-\/]+$/g,'')}
+function titleCase(t){return t.toLowerCase().replace(/(^|\s)(\S)/g,(m,a,b)=>a+b.toUpperCase()).replace(/\b(De|Da|Do|Dos|Das|E)\b/g,w=>w.toLowerCase())}
+const RUA_RE=/^(R\.?|RUA|AV\.?|AVENIDA|TV\.?|TRAV\.?|TRAVESSA|AL\.?|ALAMEDA|EST\.?|ESTRADA|ROD\.?|RODOVIA|P[CÇ]A\.?|PRA[CÇ]A|LGO\.?|LARGO|VIELA|VL\.?|PQ\.?|S\/N)\b/i;
+const ABREV={R:'Rua',RUA:'Rua',AV:'Avenida',AVENIDA:'Avenida',TV:'Travessa',TRAV:'Travessa',AL:'Alameda',EST:'Estrada',ROD:'Rodovia',PC:'Praça',PCA:'Praça','PÇA':'Praça',LGO:'Largo',JD:'Jardim',JARD:'Jardim',VL:'Vila',PQ:'Parque',PRQ:'Parque',RES:'Residencial',CJ:'Conjunto',STA:'Santa',STO:'Santo',SAO:'São',DR:'Dr.',PROF:'Prof.',CEL:'Cel.',CAP:'Cap.',ENG:'Eng.',PE:'Pe.'};
+function expandAbrev(t){
+ return titleCase(t.split(' ').map((w,i)=>{const k=w.replace(/\.$/,'').toUpperCase();return ABREV[k]&&(i===0||!['DE','DA','DO'].includes(k))?ABREV[k]:w}).join(' '))
+  .replace(/\b(Dr|Prof|Cel|Cap|Eng|Pe)\.\./g,'$1.')
+}
+function parsePDA(text){
+ const lines=text.split(/\r?\n/).map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean),out={};
+ const after=(re,valRe)=>{
+  for(let i=0;i<lines.length;i++){
+   const m=lines[i].match(re);if(!m)continue;
+   const rest=lines[i].slice(m.index+m[0].length).replace(/^[\s:;.\-=]+/,'');
+   let v=rest.match(valRe);if(v)return v[0];
+   if(lines[i+1]){v=lines[i+1].match(valRe);if(v&&!/[a-z]{4,}/i.test(lines[i+1].replace(valRe,'')))return v[0]}
+  }
+  return null
+ };
+ const NUMV=/[0-9OoIl][0-9OoIl.\-\/]{3,}/;
+ // Medidor: "MD: B22678461" (também aceita "Medidor")
+ let med=after(/\b(m[dD0O]|n[º°o.]?\s*(do\s*)?medidor|medidor|med\.?)\s*[:;.]/i,/[0-9A-Z][0-9A-Z.\-]{4,}/i)
+  ||after(/\b(medidor|med)\b/i,/[0-9A-Z][0-9A-Z.\-]{4,}/i);
+ if(!med){const m=text.match(/\b[A-Z][0-9]{7,9}\b/);if(m)med=m[0]}
+ if(med){med=med.toUpperCase();out.medidor=med.charAt(0)+cleanNum(med.slice(1)).replace(/[A-Z]/gi,c=>({O:'0',I:'1',L:'1',S:'5',B:'8',Z:'2'}[c.toUpperCase()]||c))}
+ // Código do cliente: "UC: 8791309"
+ const cod=after(/\b(u\.?\s?[cCgG]\.?|c[oó0]d(igo|\.)?\s*(do\s*)?(cliente|cli\.?)?|cliente|instala[cç][aã]o|inst\.?|conta\s*contrato)\s*[:;]/i,NUMV)
+  ||after(/\b(u\.?\s?c|c[oó]d(igo)?\s*(do\s*)?cliente|instala[cç][aã]o)\b/i,NUMV);
+ if(cod)out.codigo=cleanNum(cod).replace(/[^0-9]/g,'');
+ // Endereço: "R JUVENAL DE MEDEIROS, 157, JD" + linha seguinte (bairro)
+ let idx=lines.findIndex(l=>/\b(endere[cç]o|logradouro)\b\s*[:;]?/i.test(l)),addr=null;
+ if(idx>=0){addr=lines[idx].replace(/^.*?\b(endere[cç]o|logradouro)\b\s*[:;.\-]?\s*/i,'');if(!addr&&lines[idx+1]){idx++;addr=lines[idx]}}
+ else{
+  const RUA_ANY=/(^|[^A-Z])(RUA|R|AVENIDA|AV|TRAVESSA|TV|ALAMEDA|AL|ESTRADA|EST|RODOVIA|ROD|PRA[CÇ]A|P[CÇ]A|LARGO|LGO|VIELA)\.?\s+(?=[A-ZÀ-Ú]{3,})/;
+  idx=lines.findIndex(l=>RUA_ANY.test(l));
+  if(idx>=0){const m=lines[idx].match(RUA_ANY);addr=lines[idx].slice(m.index+m[1].length)}
+  else{
+   idx=lines.findIndex(l=>/[A-ZÀ-Ú]{3,}( [A-ZÀ-Ú]{2,})+,\s*\d{1,5}\b/.test(l)&&!/\b(UC|MD)\s*[:;]/.test(l));
+   if(idx>=0){const m=lines[idx].match(/[A-ZÀ-Ú]{3,}( [A-ZÀ-Ú]{2,})+,\s*\d{1,5}\b.*/);addr=m[0].replace(/^R(?=[^AEIOUÁÉÍÓÚÂÊÔÃÕH\s][A-ZÀ-Ú]{3,})/,'R ')}
+  }
+ }
+ if(addr){
+  const capsRun=(t,skipLead)=>{
+   const tk=t.split(' '),out=[];let started=false;
+   for(const w of tk){
+    const ok=/^[A-ZÀ-Ú0-9][A-ZÀ-Ú0-9,.\/'\-]*$/.test(w);
+    if(!started){if(ok&&(!skipLead||w.replace(/[^A-ZÀ-Ú]/g,'').length>=2||/^\d/.test(w)))started=true;else continue}
+    if(!ok){const pre=w.match(/^[A-ZÀ-Ú0-9][A-ZÀ-Ú0-9,.\/'\-]*/);if(pre&&/\d|,/.test(pre[0]))out.push(pre[0]);break}
+    out.push(w)
+   }
+   return out.join(' ').replace(/[,.\s]+$/,'')
+  };
+  addr=capsRun(addr,false);
+  let nx=lines[idx+1]?capsRun(lines[idx+1],true):'';
+  if(!(nx&&/^[A-ZÀ-Ú .']{3,}$/.test(nx)&&!/^(MD|UC|CON)\b/.test(nx)))nx='';
+  let parts=addr.split(/\s*,\s*/).map(x=>x.trim()).filter(Boolean),rua=parts[0],num=null,bairro='';
+  const ni=parts.findIndex((x,i)=>i>0&&/^(\d{1,5}[A-Z]?|S\/?N)\.?$/i.test(cleanNum(x)||x));
+  if(ni>0){num=(cleanNum(parts[ni])||parts[ni]).toUpperCase();rua=parts.slice(0,ni).join(', ');bairro=parts.slice(ni+1).join(', ')}
+  else{
+   const m=rua.match(/\s(\d{1,5}[A-Z]?|S\/N)\s*$/i);
+   if(m){num=m[1].toUpperCase();rua=rua.slice(0,m.index)}
+   bairro=parts.slice(1).join(', ')
+  }
+  const CURTAS=['JD','VL','PQ','DE','DA','DO','DOS','DAS','E','STA','STO','SAO','SÃO','RES','CJ','NS','N','SR','SRA','BOA','SOL','LUZ','REI','PAZ','DR','JD.','VL.','PQ.'];
+  if(bairro){
+   const bt=bairro.split(' '),keep=[];
+   for(const w of bt){const u=w.replace(/[.,]/g,'');if(/^\d+$/.test(u)||(u.length<=3&&!CURTAS.includes(u)&&!CURTAS.includes(w)))break;keep.push(w)}
+   bairro=keep.join(' ').replace(/[,.\s]+$/,'')
+  }
+  rua=rua.replace(/\s+-\s+.*$/,'').trim();
+  if(nx)bairro=(bairro?bairro+' ':'')+nx;
+  if(rua.length>2)out.endereco=expandAbrev(rua)+(bairro?' – '+expandAbrev(bairro):'');
+  if(num)out.numero=num
+ }
+ if(!out.numero){
+  const n=after(/\b(n[uú]mero|nro\.?)\b/i,/\d{1,5}[A-Z]?|S\/N/i);
+  if(n)out.numero=n.toUpperCase()
+ }
+ // Leitura: só se tiver número escrito no campo (ignora "Capac. Leit." e "Leitura anterior")
+ for(const l of lines){
+  if(/capac|ant|m[eé]dia/i.test(l))continue;
+  const m=l.match(/\bleitura\b\s*(atual)?\s*[:\-=]?\s*(\d{1,7})\b/i);
+  if(m){out.leitura=m[2];break}
+ }
+ return out
+}
+function mergePDA(rs){
+ const pick=(f,score)=>{
+  const vals=rs.map(r=>r[f]).filter(Boolean);if(!vals.length)return undefined;
+  const cnt={};vals.forEach(v=>cnt[v]=(cnt[v]||0)+1);
+  return Object.keys(cnt).sort((a,b)=>(cnt[b]-cnt[a])||(score(b)-score(a)))[0]
+ };
+ return{
+  codigo:pick('codigo',v=>v.length),
+  medidor:pick('medidor',v=>(/^[A-Z]/.test(v)?100:0)+v.length),
+  endereco:pick('endereco',v=>v.length),
+  numero:pick('numero',v=>v.length),
+  leitura:pick('leitura',v=>v.length)
+ }
+}
+function markAuto(id){$(id).classList.add('auto-filled')}
+function clearAutoFill(){document.querySelectorAll('.auto-filled').forEach(el=>el.classList.remove('auto-filled'))}
+document.addEventListener('input',e=>{if(e.target.classList&&e.target.classList.contains('auto-filled'))e.target.classList.remove('auto-filled')});
+async function readPDA(file){
+ const st=$('status'),btn=$('pdaBtn');
+ btn.disabled=true;btn.textContent='⏳ Lendo a foto...';st.style.color='var(--blue)';
+ st.textContent='Lendo a tela do PDA. Na primeira vez demora um pouco mais.';setPdaProgress(.02);
+ try{
+  const w=await getWorker(),texts=[];
+  ocrPass=0;texts.push((await w.recognize(await prepImage(file,3200,10))).data.text||'');
+  ocrPass=1;texts.push((await w.recognize(await prepImage(file,2000,18))).data.text||'');
+  $('pdaText').textContent=texts.map(t=>t.trim()).join('\n\n— 2ª leitura —\n\n')||'(nenhum texto encontrado)';$('pdaRaw').style.display='block';
+  const r=mergePDA(texts.map(parsePDA)),got=[];
+  clearAutoFill();
+  if(r.codigo){$('codigo').value=r.codigo;markAuto('codigo');got.push('código')}
+  if(r.endereco){$('endereco').value=r.endereco;markAuto('endereco');got.push('endereço')}
+  if(r.numero){$('numero').value=r.numero;markAuto('numero');got.push('nº')}
+  if(r.medidor){$('medidor').value=r.medidor;markAuto('medidor');got.push('medidor')}
+  if(r.leitura){readings=[r.leitura];renderReadings();document.querySelector('.reading').classList.add('auto-filled');got.push('leitura')}
+  if(got.length){st.textContent=`Preenchido: ${got.join(', ')}. Confira os campos em amarelo e escolha a situação.`;st.style.color='var(--blue)'}
+  else{st.textContent='Não consegui identificar os campos. Abra "Ver texto lido da foto" e tente outra foto mais de perto.';st.style.color='var(--red)'}
+ }catch(e){
+  st.textContent='Não deu para ler a foto. Na primeira vez precisa de internet.';st.style.color='var(--red)'
+ }finally{
+  btn.disabled=false;btn.textContent='📟 Ler tela do PDA';
+  setTimeout(()=>$('pdaBar').classList.remove('show'),500)
+ }
+}
+$('pdaBtn').onclick=()=>$('pdaInput').click();
+$('pdaInput').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)readPDA(f)};
 $('cancelEdit').onclick=()=>{resetForm();$('status').textContent='Edição cancelada.';$('status').style.color='var(--muted)'};
 $('previews').addEventListener('click',ev=>{
  const img=ev.target.closest('img[data-i]');if(!img)return;
