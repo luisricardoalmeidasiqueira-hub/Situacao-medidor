@@ -92,12 +92,14 @@ min-width:0;height:43px;border:1px solid var(--line);border-radius:11px;
 background:var(--panel2);color:var(--blue);font-weight:850;font-size:11px;
 display:flex;align-items:center;justify-content:center;gap:4px;padding:0 5px
 }
-.action-btn:nth-child(1){grid-column:span 2}
-.action-btn:nth-child(2){grid-column:span 2}
-.action-btn:nth-child(3){grid-column:span 2}
-.action-btn:nth-child(4){grid-column:span 2}
-.action-btn:nth-child(5){grid-column:span 2}
-.action-btn:nth-child(6){grid-column:span 2}
+.action-grid{grid-template-columns:2fr 1fr 1fr 1fr!important}
+.action-grid .action-btn{height:46px}
+.action-grid .action-icon{font-size:22px}
+.hdr-btn{width:36px;height:36px;border:0;border-radius:10px;background:rgba(255,255,255,.16);font-size:18px;display:grid;place-items:center;flex:0 0 auto;padding:0}
+.hdr-btn:active{background:rgba(255,255,255,.3)}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);max-width:92vw;background:#17324a;color:#fff;font-size:12.5px;font-weight:750;padding:9px 13px;border-radius:11px;box-shadow:0 6px 18px rgba(0,0,0,.18);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s;text-align:center}
+.toast.show{opacity:1}
+.toast.err{background:var(--red)}
 .action-icon{font-size:18px;line-height:1}
 .save-action{background:var(--blue);border-color:var(--blue);color:#fff}
 .photo-action{background:#edf6fd}
@@ -153,11 +155,14 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <main class="app">
 <header class="forms-header">
   <div class="forms-logo">📋</div>
-  <div>
+  <div style="flex:1;min-width:0">
     <div class="forms-title">Situação Medidor</div>
-    <div class="forms-subtitle">Acompanhamento de Leituras</div>
+    <div class="forms-subtitle">Acompanhamento de Leituras · <span id="hdrVersion"></span></div>
   </div>
+  <button class="hdr-btn" id="shareBtn" type="button" title="Compartilhar aplicativo" aria-label="Compartilhar aplicativo">↗️</button>
+  <button class="hdr-btn" id="updateBtn" type="button" title="Atualizar aplicativo" aria-label="Atualizar aplicativo">🔄</button>
 </header>
+<div class="toast" id="toast"></div>
 
 <section class="card" id="formCard">
 <div class="edit-banner" id="editBanner"><span id="editText">✏️ Editando registro</span><button type="button" id="cancelEdit">Cancelar</button></div>
@@ -216,12 +221,10 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <div class="hint" id="photoHint" style="display:none">Toque na foto para remover.</div>
 
 <div class="action-grid">
-<button class="action-btn save-action" id="saveBtn" type="button" title="Salvar registro"><span class="action-icon">💾</span>Salvar</button>
-<button class="action-btn photo-action" id="cameraBtn" type="button" title="Tirar foto"><span class="action-icon">📷</span>Foto</button>
-<button class="action-btn photo-action" id="galleryBtn" type="button" title="Escolher da galeria"><span class="action-icon">🖼️</span>Galeria</button>
-<button class="action-btn" id="exportBtn" type="button" title="Exportar CSV"><span class="action-icon">📄</span>CSV</button>
-<button class="action-btn" id="shareBtn" type="button" title="Compartilhar aplicativo"><span class="action-icon">↗️</span>Compartilhar</button>
-<button class="action-btn" id="updateBtn" type="button" title="Atualizar aplicativo"><span class="action-icon">🔄</span>Atualizar</button>
+<button class="action-btn save-action" id="saveBtn" type="button" title="Salvar registro" aria-label="Salvar registro"><span class="action-icon">💾</span></button>
+<button class="action-btn photo-action" id="cameraBtn" type="button" title="Tirar foto" aria-label="Tirar foto"><span class="action-icon">📷</span></button>
+<button class="action-btn photo-action" id="galleryBtn" type="button" title="Escolher da galeria" aria-label="Escolher da galeria"><span class="action-icon">🖼️</span></button>
+<button class="action-btn" id="exportBtn" type="button" title="Exportar planilha CSV" aria-label="Exportar planilha CSV"><span class="action-icon">📄</span></button>
 </div>
 <div class="status" id="status"></div>
 </section>
@@ -246,7 +249,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='2.9',APP_DATE='14/10/2026';
+const APP_VERSION='3.1',APP_DATE='14/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -459,7 +462,7 @@ function shareApp(){
   if(navigator.share){navigator.share(shareData).catch(()=>{});return}
   if(navigator.clipboard&&window.isSecureContext){
    navigator.clipboard.writeText(window.location.href);
-   $('status').textContent='Link do aplicativo copiado.';$('status').style.color='var(--blue)';return
+   toast('Link do aplicativo copiado.');return
   }
   prompt('Copie o link do aplicativo:',window.location.href)
  }catch(e){
@@ -491,24 +494,45 @@ $('photoInput').onchange=e=>{
 };
 $('exportBtn').onclick=exportCSV;
 $('shareBtn').onclick=shareApp;
-async function updateApp(){
- const st=$('status');st.style.color='var(--blue)';st.textContent='Verificando atualização...';
- try{
-  const base=location.href.split('?')[0].split('#')[0];
-  const res=await fetch(base+'?check='+Date.now(),{cache:'no-store'});
-  if(!res.ok)throw new Error('http');
-  const html=await res.text(),m=html.match(/APP_VERSION='([^']+)'/),online=m?m[1]:null;
-  if(online&&online!==APP_VERSION){
-   st.textContent=`Nova versão ${online} encontrada. Atualizando...`;
-   setTimeout(()=>location.replace(base+'?v='+Date.now()),600);
-  }else{
-   st.textContent=`Você já está na versão mais recente (${APP_VERSION}).`;
-  }
- }catch(e){
-  st.textContent='Sem conexão. Tente atualizar de novo com internet.';st.style.color='var(--red)';
- }
+let toastT=null;
+function toast(msg,err,ms){const t=$('toast');t.textContent=msg;t.classList.toggle('err',!!err);t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),ms||3000)}
+const KEY_LATEST='situacao-medidor-ultima-versao';
+function cmpVer(a,b){const x=String(a).split('.').map(Number),y=String(b).split('.').map(Number);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d}return 0}
+function baseUrl(){return location.href.split('?')[0].split('#')[0]}
+function goFresh(){
+ let n=0;try{n=Number(sessionStorage.getItem('sm-reload')||0);sessionStorage.setItem('sm-reload',n+1)}catch(_){}
+ if(n>=3)return false;
+ location.replace(baseUrl()+'?v='+Date.now());return true
 }
-$('updateBtn').onclick=updateApp;
+async function onlineVersion(){
+ const res=await fetch(baseUrl()+'?check='+Date.now(),{cache:'no-store'});
+ if(!res.ok)throw new Error('http');
+ const m=(await res.text()).match(/APP_VERSION='([^']+)'/);return m?m[1]:null
+}
+async function updateApp(silent){
+ if(!silent)toast('Verificando atualização...');
+ try{
+  const online=await onlineVersion();
+  if(online&&cmpVer(online,APP_VERSION)>0){
+   try{localStorage.setItem(KEY_LATEST,online)}catch(_){}
+   toast(`Nova versão ${online} encontrada. Atualizando...`);
+   setTimeout(goFresh,600);
+  }else if(!silent)toast(`Você já está na versão mais recente (${APP_VERSION}).`);
+ }catch(e){if(!silent)toast('Sem conexão. Tente atualizar de novo com internet.',true)}
+}
+/* ao abrir: se o aparelho já sabe de uma versão mais nova, ou o site tem uma, atualiza sozinho */
+(function autoUpdate(){
+ let latest=null;try{latest=localStorage.getItem(KEY_LATEST)}catch(_){}
+ if(latest&&cmpVer(latest,APP_VERSION)>0){if(goFresh())return}
+ try{if(!latest||cmpVer(APP_VERSION,latest)>=0)localStorage.setItem(KEY_LATEST,APP_VERSION)}catch(_){}
+ setTimeout(()=>{try{sessionStorage.removeItem('sm-reload')}catch(_){}},8000);
+ if(navigator.onLine!==false)updateApp(true);
+ let last=Date.now();
+ document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&Date.now()-last>60000){last=Date.now();updateApp(true)}
+ });
+})();
+$('updateBtn').onclick=()=>updateApp(false);
 
 /* ===== Leitura da tela do PDA (OCR) ===== */
 let ocrWorker=null,ocrPass=0;
@@ -652,9 +676,9 @@ function markAuto(id){$(id).classList.add('auto-filled')}
 function clearAutoFill(){document.querySelectorAll('.auto-filled').forEach(el=>el.classList.remove('auto-filled'))}
 document.addEventListener('input',e=>{if(e.target.classList&&e.target.classList.contains('auto-filled'))e.target.classList.remove('auto-filled')});
 async function readPDA(file){
- const st=$('status'),btn=$('pdaBtn');
- btn.disabled=true;btn.textContent='⏳';st.style.color='var(--blue)';
- st.textContent='Lendo a tela do PDA. Na primeira vez demora um pouco mais.';setPdaProgress(.02);
+ const btn=$('pdaBtn'),say=(t,err)=>{$('status').textContent=t;$('status').style.color=err?'var(--red)':'var(--blue)';toast(t,err,err?6000:5000)};
+ btn.disabled=true;btn.textContent='⏳';
+ say('Lendo a tela do PDA. Na primeira vez demora um pouco mais.');setPdaProgress(.02);
  try{
   const w=await getWorker(),texts=[];
   ocrPass=0;texts.push((await w.recognize(await prepImage(file,3200,10))).data.text||'');
@@ -667,10 +691,10 @@ async function readPDA(file){
   if(r.numero){$('numero').value=r.numero;markAuto('numero');got.push('nº')}
   if(r.medidor){$('medidor').value=r.medidor;markAuto('medidor');got.push('medidor')}
   if(r.leitura){readings=[r.leitura];renderReadings();document.querySelector('.reading').classList.add('auto-filled');got.push('leitura')}
-  if(got.length){st.textContent=`Preenchido: ${got.join(', ')}. Confira os campos em amarelo e escolha a situação.`;st.style.color='var(--blue)'}
-  else{st.textContent='Não consegui identificar os campos. Abra "Ver texto lido da foto" e tente outra foto mais de perto.';st.style.color='var(--red)'}
+  if(got.length)say(`Preenchido: ${got.join(', ')}. Confira os campos em amarelo e escolha a situação.`)
+  else say('Não consegui identificar os campos. Abra "Ver texto lido da foto" e tente outra foto mais de perto.',true)
  }catch(e){
-  st.textContent='Não deu para ler a foto. Na primeira vez precisa de internet.';st.style.color='var(--red)'
+  say('Não deu para ler a foto. Na primeira vez precisa de internet.',true)
  }finally{
   btn.disabled=false;btn.textContent='📟';
   setTimeout(()=>$('pdaBar').classList.remove('show'),500)
@@ -728,7 +752,7 @@ $('saveBtn').onclick=()=>{
  saveData();resetForm();renderRecords();
  $('status').textContent=`Registro salvo na Etapa ${stage}.`;$('status').style.color='var(--blue)'
 };
-$('versionTag').textContent=`Versão ${APP_VERSION} · ${APP_DATE}`;
+$('versionTag').textContent=`Versão ${APP_VERSION} · ${APP_DATE}`;$('hdrVersion').textContent=`v${APP_VERSION}`;
 try{$('apontador').value=localStorage.getItem(KEY_APONTADOR)||''}catch(e){}
 $('apontador').addEventListener('input',e=>{try{localStorage.setItem(KEY_APONTADOR,e.target.value.trim())}catch(_){}});
 loadData();renderStages();renderReadings();$('data').value=todayStr();renderRecords();
