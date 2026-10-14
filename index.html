@@ -187,7 +187,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <option value="Necessita tábua de fixação">Necessita tábua de fixação</option>
 <option value="Borne derretido">Borne derretido</option>
 <option value="Mono 240">Mono 240</option>
-<option value="Medidor carbonizado">Medidor carbonizado</option>
+<option value="Carbonizado">Carbonizado</option>
 </select>
 
 <label for="data">Data</label>
@@ -237,7 +237,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='2.6',APP_DATE='14/10/2026';
+const APP_VERSION='2.7',APP_DATE='14/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -255,7 +255,7 @@ function fmtDateTime(ts){
 }
 function saveData(){try{localStorage.setItem(KEY,JSON.stringify(entries))}catch(e){}}
 function loadData(){
- try{const raw=localStorage.getItem(KEY);entries=raw?JSON.parse(raw):[];if(!Array.isArray(entries))entries=[]}
+ try{const raw=localStorage.getItem(KEY);entries=raw?JSON.parse(raw):[];if(!Array.isArray(entries))entries=[];entries.forEach(e=>{if(e.situacao==='Medidor carbonizado')e.situacao='Carbonizado'})}
  catch(e){entries=[]}
 }
 function renderStages(){
