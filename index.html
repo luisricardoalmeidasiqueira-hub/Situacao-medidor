@@ -93,9 +93,10 @@ background:var(--panel2);color:var(--blue);font-weight:850;font-size:11px;
 display:flex;align-items:center;justify-content:center;gap:4px;padding:0 5px
 }
 .action-grid{grid-template-columns:2fr 1fr 1fr 1fr!important}
-.action-grid .action-btn{height:46px}
-.action-grid .action-icon{font-size:22px}
-.hdr-btn{width:36px;height:36px;border:0;border-radius:10px;background:rgba(255,255,255,.16);font-size:18px;display:grid;place-items:center;flex:0 0 auto;padding:0}
+.action-grid{gap:6px!important;margin-top:9px!important}
+.action-grid .action-btn{height:36px;border-radius:10px}
+.action-grid .action-icon{font-size:17px}
+.hdr-btn{width:31px;height:31px;border:0;border-radius:9px;background:rgba(255,255,255,.16);font-size:15px;display:grid;place-items:center;flex:0 0 auto;padding:0}
 .hdr-btn:active{background:rgba(255,255,255,.3)}
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);max-width:92vw;background:#17324a;color:#fff;font-size:12.5px;font-weight:750;padding:9px 13px;border-radius:11px;box-shadow:0 6px 18px rgba(0,0,0,.18);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s;text-align:center}
 .toast.show{opacity:1}
@@ -107,7 +108,7 @@ display:flex;align-items:center;justify-content:center;gap:4px;padding:0 5px
 .previews{display:flex;gap:7px;overflow:auto;margin-top:7px}
 .previews img{width:58px;height:58px;object-fit:cover;border-radius:9px;border:1px solid var(--line)}
 .view-tabs{display:flex;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:10px}
-.view-tabs button{flex:1;border:0;background:transparent;color:var(--muted);font-weight:850;font-size:12.5px;padding:8px 6px;border-radius:9px;display:flex;align-items:center;justify-content:center;gap:6px}
+.view-tabs button{flex:1;border:0;background:transparent;color:var(--muted);font-weight:850;font-size:12px;padding:6px 5px;border-radius:9px;display:flex;align-items:center;justify-content:center;gap:6px}
 .view-tabs button.on{background:#fff;color:var(--blue);box-shadow:0 2px 6px var(--shadow)}
 .tab-dot{width:9px;height:9px;border-radius:50%;background:#f08a24;display:none}
 .tab-dot.show{display:inline-block}
@@ -124,15 +125,15 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 .meta strong{color:var(--text)}
 .bad{font-weight:900;color:var(--red)}.good{font-weight:900;color:var(--blue)}
 .record-actions{display:flex;gap:5px;margin-top:7px;padding-top:6px;border-top:1px solid var(--line)}
-.record-actions button{flex:1;min-width:0;padding:5px 2px;border-radius:9px;font-size:10.5px;font-weight:800;border:1px solid var(--line);background:#fff;line-height:1.15;display:flex;flex-direction:column;align-items:center;gap:1px}
-.record-actions button b{font-size:15px;line-height:1}
+.record-actions button{flex:1;min-width:0;padding:3px 2px;border-radius:8px;font-size:9.5px;font-weight:800;border:1px solid var(--line);background:#fff;line-height:1.15;display:flex;flex-direction:column;align-items:center;gap:1px}
+.record-actions button b{font-size:12.5px;line-height:1}
 .share{color:#1f8a4c}
 .rec-compact{padding:9px 10px}
 .rec-compact .code{font-size:15.5px}
 .rec-compact .meta{margin-top:2px;font-size:12px;line-height:1.35}
 .meta.small{font-size:11px;color:#8597a6}
 .head-actions{display:flex;align-items:center;gap:7px}
-.share-list{border:1px solid var(--line);background:#fff;color:#1f8a4c;border-radius:9px;padding:5px 9px;font-size:11.5px;font-weight:850}
+.share-list{border:1px solid var(--line);background:#fff;color:#1f8a4c;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:850}
 .repeat{color:#b45f06;font-weight:800}
 .repeat .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#f08a24;margin-right:5px;vertical-align:middle}
 .again{color:#b45f06}
@@ -249,7 +250,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='3.1',APP_DATE='14/10/2026';
+const APP_VERSION='3.2',APP_DATE='14/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
