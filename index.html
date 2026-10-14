@@ -69,9 +69,12 @@ width:42px;border:1px solid var(--line);border-radius:10px;
 background:var(--panel2);color:var(--blue);font-weight:900
 }
 #photoInput,#pdaInput{display:none}
-.pda-btn{width:100%;height:50px;margin-top:12px;border:0;border-radius:13px;
-background:linear-gradient(135deg,#0d4f83,#1769aa);color:#fff;font-weight:900;font-size:14.5px;
-display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 5px 14px rgba(23,105,170,.2)}
+.label-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px}
+.label-row label{margin-top:0}
+.label-row label{margin-bottom:5px}
+.pda-btn{width:38px;height:34px;padding:0;justify-content:center;margin:0 0 5px;border:0;border-radius:11px;
+background:var(--blue);color:#fff;font-weight:900;font-size:19px;
+display:flex;align-items:center;gap:5px;flex:0 0 auto}
 .pda-btn:disabled{opacity:.7}
 .pda-bar{height:5px;border-radius:3px;background:var(--panel2);margin-top:7px;overflow:hidden;display:none}
 .pda-bar.show{display:block}
@@ -118,8 +121,16 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 .meta{margin-top:4px;color:var(--muted);font-size:12.5px;line-height:1.4}
 .meta strong{color:var(--text)}
 .bad{font-weight:900;color:var(--red)}.good{font-weight:900;color:var(--blue)}
-.record-actions{display:flex;gap:7px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}
-.record-actions button{flex:1;min-width:0;padding:6px 4px;border-radius:9px;font-size:12px;font-weight:800;border:1px solid var(--line);background:#fff;line-height:1.2}
+.record-actions{display:flex;gap:5px;margin-top:7px;padding-top:6px;border-top:1px solid var(--line)}
+.record-actions button{flex:1;min-width:0;padding:5px 2px;border-radius:9px;font-size:10.5px;font-weight:800;border:1px solid var(--line);background:#fff;line-height:1.15;display:flex;flex-direction:column;align-items:center;gap:1px}
+.record-actions button b{font-size:15px;line-height:1}
+.share{color:#1f8a4c}
+.rec-compact{padding:9px 10px}
+.rec-compact .code{font-size:15.5px}
+.rec-compact .meta{margin-top:2px;font-size:12px;line-height:1.35}
+.meta.small{font-size:11px;color:#8597a6}
+.head-actions{display:flex;align-items:center;gap:7px}
+.share-list{border:1px solid var(--line);background:#fff;color:#1f8a4c;border-radius:9px;padding:5px 9px;font-size:11.5px;font-weight:850}
 .repeat{color:#b45f06;font-weight:800}
 .repeat .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#f08a24;margin-right:5px;vertical-align:middle}
 .again{color:#b45f06}
@@ -154,14 +165,12 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <input id="apontador" type="text" autocomplete="name" autocapitalize="words" placeholder="Seu nome ou prontuário">
 <div class="hint">Fica salvo no aparelho, não precisa digitar toda vez.</div>
 
-<button class="pda-btn" id="pdaBtn" type="button">📟 Ler tela do PDA</button>
+<div class="label-row"><label for="codigo">Código do cliente <span class="req">*</span></label>
+<button class="pda-btn" id="pdaBtn" type="button" title="Ler a tela do PDA" aria-label="Ler a tela do PDA">📟</button></div>
 <input id="pdaInput" type="file" accept="image/*" capture="environment">
-<div class="pda-bar" id="pdaBar"><div id="pdaBarFill"></div></div>
-<div class="hint" id="pdaHint">Tire a foto da tela do PDA e o app preenche código (UC), endereço, nº e medidor (MD). A foto não fica salva. Os campos em amarelo foram lidos dela, então confira antes de salvar.</div>
-<details class="pda-raw" id="pdaRaw" style="display:none"><summary>Ver texto lido da foto</summary><pre id="pdaText"></pre></details>
-
-<label for="codigo">Código do cliente <span class="req">*</span></label>
 <input id="codigo" inputmode="numeric" autocomplete="off" placeholder="Digite o código">
+<div class="pda-bar" id="pdaBar"><div id="pdaBarFill"></div></div>
+<details class="pda-raw" id="pdaRaw" style="display:none"><summary>Ver texto lido da foto</summary><pre id="pdaText"></pre></details>
 
 <div class="addr-row">
 <div class="addr-street"><label for="endereco">Endereço</label>
@@ -224,7 +233,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </div>
 <div class="records-head">
 <h2 id="recTitle">Registros da <span id="stageTitle">Etapa 1</span></h2>
-<div class="count" id="count">0</div>
+<div class="head-actions"><button class="share-list" type="button" id="shareListBtn">📤 Enviar lista</button><div class="count" id="count">0</div></div>
 </div>
 <div id="records"></div>
 </section>
@@ -237,7 +246,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='2.7',APP_DATE='14/10/2026';
+const APP_VERSION='2.9',APP_DATE='14/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -305,7 +314,7 @@ function resetForm(){
  selectedFotos=[];renderPhotos();clearAutoFill();
  editingId=null;$('editBanner').classList.remove('show');$('formCard').classList.remove('editing')
 }
-let viewMode='etapa';
+let viewMode='etapa',visibleList=[];
 function mesAtual(){return todayStr().slice(0,7)}
 function mesPassado(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function pendentesMesPassado(){
@@ -323,26 +332,29 @@ function renderRecords(){
   filtered=entries.filter(e=>Number(e.etapa)===Number(stage)).sort((a,b)=>(b.ultimoLanc||b.criadoEm||0)-(a.ultimoLanc||a.criadoEm||0));
   $('recTitle').innerHTML=`Registros da <span id="stageTitle">Etapa ${stage}</span>`;
  }
- $('count').textContent=filtered.length;
+ $('count').textContent=filtered.length;visibleList=filtered.slice();
  if(!filtered.length){$('records').innerHTML=viewMode==='mes'
   ?`<div class="empty">Nenhum pendente de ${fmtMes(mesPassado())} para passar para ${fmtMes(mesAtual())}.</div>`
   :'<div class="empty">Nenhum registro nesta etapa.</div>';return}
- $('records').innerHTML=filtered.map(e=>`<article class="record ${e.resolvido?'resolved':''}">
- <div class="record-top"><div class="code">${esc(e.codigo)}</div><div class="top-right">${!e.resolvido&&mesesDe(e).length>1?`<span class="mes-chip">${mesesDe(e).length} meses</span>`:''}<div class="date">${esc(fmtDate(e.data))}</div></div></div>
- ${linhaMeses(e)}
- ${(e.endereco||e.numero)?`<div class="meta">📍 <strong>${esc(fmtEndereco(e))}</strong></div>`:''}
+ $('records').innerHTML=filtered.map(e=>{
+ const leit=(e.leituras||[]).length?(e.leituras||[]).join(' / '):'',ms=mesesDe(e);
+ const info=[leit?`Leitura <strong>${esc(leit)}</strong>`:'',e.apontadoPor?`por <strong>${esc(e.apontadoPor)}</strong>`:'',ms.length===1?`Lançado em ${fmtMes(ms[0])}`:''].filter(Boolean).join(' · ');
+ const reg=`Registrado ${esc(fmtDateTime(e.criadoEm))}`+(e.editadoEm?` · editado ${esc(fmtDateTime(e.editadoEm))}${e.editadoPor?' por '+esc(e.editadoPor):''}`:'');
+ return `<article class="record rec-compact ${e.resolvido?'resolved':''}">
+ <div class="record-top"><div class="code">${esc(e.codigo)}</div><div class="top-right">${!e.resolvido&&ms.length>1?`<span class="mes-chip">${ms.length} meses</span>`:''}<div class="date">${esc(fmtDate(e.data))}</div></div></div>
  <div class="meta">Medidor <strong>${esc(e.medidor)}</strong> · <span class="${e.resolvido?'good':'bad'}">${esc(e.situacao)}</span> · Etapa ${esc(e.etapa)}</div>
- <div class="meta">Leitura: <strong>${esc((e.leituras||[]).length?(e.leituras||[]).join(' / '):'—')}</strong></div>
- <div class="meta">Apontado por: <strong>${esc(e.apontadoPor||'—')}</strong></div>
- <div class="meta">Primeiro registro em ${esc(fmtDateTime(e.criadoEm))}</div>
- ${e.editadoEm?`<div class="meta">Editado em ${esc(fmtDateTime(e.editadoEm))}${e.editadoPor?' por '+esc(e.editadoPor):''}</div>`:''}
+ ${(e.endereco||e.numero)?`<div class="meta">📍 <strong>${esc(fmtEndereco(e))}</strong></div>`:''}
+ ${ms.length>1||e.resolvido?linhaMeses(e):''}
+ ${info?`<div class="meta">${info}</div>`:''}
  ${e.obs?`<div class="meta">Obs.: ${esc(e.obs)}</div>`:''}
  ${e.fotos?.length?`<div class="previews">${e.fotos.map(x=>`<img src="${x}" alt="Foto do registro">`).join('')}</div>`:''}
- <div class="record-actions"><button class="edit" type="button" onclick="editEntry('${esc(e.id)}')">✏️ Editar</button>
- ${e.resolvido?'':`<button class="again" type="button" onclick="relaunch('${esc(e.id)}')">${viewMode==='mes'?'➡️ Passar p/ '+fmtMes(mesAtual()):'🔁 Lançar de novo'}</button>`}
- <button class="resolve" type="button" onclick="toggleResolved('${esc(e.id)}')">${e.resolvido?'↩️ Reabrir':'✅ Resolver'}</button>
- <button class="delete" type="button" onclick="deleteEntry('${esc(e.id)}')">🗑️ Excluir</button></div>
- </article>`).join('')
+ <div class="meta small">${reg}</div>
+ <div class="record-actions"><button class="edit" type="button" onclick="editEntry('${esc(e.id)}')"><b>✏️</b>Editar</button>
+ ${e.resolvido?'':`<button class="again" type="button" onclick="relaunch('${esc(e.id)}')"><b>${viewMode==='mes'?'➡️':'🔁'}</b>${viewMode==='mes'?'Passar':'Lançar'}</button>`}
+ <button class="resolve" type="button" onclick="toggleResolved('${esc(e.id)}')"><b>${e.resolvido?'↩️':'✅'}</b>${e.resolvido?'Reabrir':'Resolver'}</button>
+ <button class="share" type="button" onclick="shareEntry('${esc(e.id)}')"><b>📤</b>Enviar</button>
+ <button class="delete" type="button" onclick="deleteEntry('${esc(e.id)}')"><b>🗑️</b>Excluir</button></div>
+ </article>`}).join('')
 }
 window.editEntry=id=>{
  const e=entries.find(x=>x.id===id);if(!e)return;
@@ -365,6 +377,42 @@ window.relaunch=id=>{
  addLancamento(e,hoje);saveData();renderRecords();
  $('status').textContent=`Passado para ${fmtMes(mes)}. Já são ${mesesDe(e).length} meses sem resolver.`;$('status').style.color='var(--blue)'
 };
+function textoRegistro(e){
+ const ms=mesesDe(e),leit=(e.leituras||[]).join(' / ');
+ return [
+  `Código: ${e.codigo}`,
+  (e.endereco||e.numero)?`Endereço: ${fmtEndereco(e)}`:'',
+  `Medidor: ${e.medidor}`,
+  `Situação: ${e.situacao}${e.resolvido?' (resolvido)':''}`,
+  `Etapa: ${e.etapa}`,
+  leit?`Leitura: ${leit}`:'',
+  ms.length>1&&!e.resolvido?`Lançado em ${ms.length} meses sem resolver: ${ms.map(fmtMes).join(', ')}`:`Lançado em: ${ms.map(fmtMes).join(', ')}`,
+  e.obs?`Obs.: ${e.obs}`:'',
+  e.apontadoPor?`Apontado por: ${e.apontadoPor}`:''
+ ].filter(Boolean).join('\n')
+}
+async function shareText(title,text,files){
+ try{
+  if(navigator.share){
+   const data={title,text};
+   if(files&&files.length&&navigator.canShare&&navigator.canShare({files}))data.files=files;
+   await navigator.share(data);return
+  }
+ }catch(e){if(e&&e.name==='AbortError')return}
+ try{await navigator.clipboard.writeText(text);$('status').textContent='Texto copiado. É só colar no WhatsApp.';$('status').style.color='var(--blue)'}
+ catch(_){prompt('Copie o texto:',text)}
+}
+function dataUrlToFile(u,name){const [h,b64]=u.split(','),bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new File([arr],name,{type:(h.match(/data:(.*?);/)||[])[1]||'image/jpeg'})}
+window.shareEntry=id=>{
+ const e=entries.find(x=>x.id===id);if(!e)return;
+ const files=(e.fotos||[]).map((u,i)=>{try{return dataUrlToFile(u,`medidor-${e.medidor}-${i+1}.jpg`)}catch(_){return null}}).filter(Boolean);
+ shareText('Situação do medidor','📋 Situação do medidor\n'+textoRegistro(e),files)
+};
+function shareList(){
+ if(!visibleList.length){alert('Não há registros nesta lista.');return}
+ const titulo=viewMode==='mes'?`📋 Pendentes de ${fmtMes(mesPassado())}`:`📋 Registros da Etapa ${stage}`;
+ shareText('Situação do medidor',titulo+'\n\n'+visibleList.map(textoRegistro).join('\n\n— — —\n\n'))
+}
 window.deleteEntry=id=>{
  if(!confirm('Excluir este registro?'))return;
  if(editingId===id)resetForm();
@@ -426,6 +474,7 @@ $('etapa').addEventListener('change',e=>{stage=Number(e.target.value);setView('e
 function setView(v){viewMode=v;$('tabEtapa').classList.toggle('on',v==='etapa');$('tabMes').classList.toggle('on',v==='mes');renderRecords()}
 $('tabEtapa').onclick=()=>setView('etapa');
 $('tabMes').onclick=()=>setView('mes');
+$('shareListBtn').onclick=shareList;
 $('situacao').addEventListener('change',e=>setSituation(e.target.value));
 $('addReading').onclick=()=>{readings.push('');renderReadings()};
 $('cameraBtn').onclick=()=>{
@@ -604,7 +653,7 @@ function clearAutoFill(){document.querySelectorAll('.auto-filled').forEach(el=>e
 document.addEventListener('input',e=>{if(e.target.classList&&e.target.classList.contains('auto-filled'))e.target.classList.remove('auto-filled')});
 async function readPDA(file){
  const st=$('status'),btn=$('pdaBtn');
- btn.disabled=true;btn.textContent='⏳ Lendo a foto...';st.style.color='var(--blue)';
+ btn.disabled=true;btn.textContent='⏳';st.style.color='var(--blue)';
  st.textContent='Lendo a tela do PDA. Na primeira vez demora um pouco mais.';setPdaProgress(.02);
  try{
   const w=await getWorker(),texts=[];
@@ -623,7 +672,7 @@ async function readPDA(file){
  }catch(e){
   st.textContent='Não deu para ler a foto. Na primeira vez precisa de internet.';st.style.color='var(--red)'
  }finally{
-  btn.disabled=false;btn.textContent='📟 Ler tela do PDA';
+  btn.disabled=false;btn.textContent='📟';
   setTimeout(()=>$('pdaBar').classList.remove('show'),500)
  }
 }
