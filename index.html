@@ -250,7 +250,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='3.2',APP_DATE='14/10/2026';
+const APP_VERSION='3.3',APP_DATE='14/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -500,10 +500,16 @@ function toast(msg,err,ms){const t=$('toast');t.textContent=msg;t.classList.togg
 const KEY_LATEST='situacao-medidor-ultima-versao';
 function cmpVer(a,b){const x=String(a).split('.').map(Number),y=String(b).split('.').map(Number);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d}return 0}
 function baseUrl(){return location.href.split('?')[0].split('#')[0]}
+async function refreshCache(){
+ const base=baseUrl(),dir=base.replace(/[^\/]*$/,'');
+ const urls=[base,dir,dir+'index.html',dir+'manifest.json'];
+ await Promise.all(urls.map(u=>fetch(u,{cache:'reload'}).catch(()=>{})));
+ try{if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}}catch(_){}
+}
 function goFresh(){
  let n=0;try{n=Number(sessionStorage.getItem('sm-reload')||0);sessionStorage.setItem('sm-reload',n+1)}catch(_){}
  if(n>=3)return false;
- location.replace(baseUrl()+'?v='+Date.now());return true
+ refreshCache().finally(()=>location.replace(baseUrl()+'?v='+Date.now()));return true
 }
 async function onlineVersion(){
  const res=await fetch(baseUrl()+'?check='+Date.now(),{cache:'no-store'});
@@ -527,6 +533,7 @@ async function updateApp(silent){
  if(latest&&cmpVer(latest,APP_VERSION)>0){if(goFresh())return}
  try{if(!latest||cmpVer(APP_VERSION,latest)>=0)localStorage.setItem(KEY_LATEST,APP_VERSION)}catch(_){}
  setTimeout(()=>{try{sessionStorage.removeItem('sm-reload')}catch(_){}},8000);
+ if(/[?&]v=/.test(location.search)){try{history.replaceState(null,'',baseUrl())}catch(_){}refreshCache()}
  if(navigator.onLine!==false)updateApp(true);
  let last=Date.now();
  document.addEventListener('visibilitychange',()=>{
