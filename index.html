@@ -123,6 +123,8 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 .repeat{color:#b45f06;font-weight:800}
 .repeat .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#f08a24;margin-right:5px;vertical-align:middle}
 .again{color:#b45f06}
+.top-right{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.mes-chip{background:#fff1e3;color:#b45f06;border:1px solid #f5c79a;border-radius:999px;padding:2px 8px;font-size:11.5px;font-weight:900;white-space:nowrap}
 .delete{color:var(--red)}.resolve{color:var(--blue)}.edit{color:var(--blue)}
 .edit-banner{display:none;align-items:center;justify-content:space-between;gap:8px;background:#fff7e6;border:1px solid #f0d39a;color:#8a5a00;border-radius:11px;padding:8px 10px;font-size:12.5px;font-weight:800;margin-bottom:4px}
 .edit-banner.show{display:flex}
@@ -235,7 +237,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='2.5',APP_DATE='14/10/2026';
+const APP_VERSION='2.6',APP_DATE='14/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -326,7 +328,7 @@ function renderRecords(){
   ?`<div class="empty">Nenhum pendente de ${fmtMes(mesPassado())} para passar para ${fmtMes(mesAtual())}.</div>`
   :'<div class="empty">Nenhum registro nesta etapa.</div>';return}
  $('records').innerHTML=filtered.map(e=>`<article class="record ${e.resolvido?'resolved':''}">
- <div class="record-top"><div class="code">${esc(e.codigo)}</div><div class="date">${esc(fmtDate(e.data))}</div></div>
+ <div class="record-top"><div class="code">${esc(e.codigo)}</div><div class="top-right">${!e.resolvido&&mesesDe(e).length>1?`<span class="mes-chip">${mesesDe(e).length} meses</span>`:''}<div class="date">${esc(fmtDate(e.data))}</div></div></div>
  ${linhaMeses(e)}
  ${(e.endereco||e.numero)?`<div class="meta">📍 <strong>${esc(fmtEndereco(e))}</strong></div>`:''}
  <div class="meta">Medidor <strong>${esc(e.medidor)}</strong> · <span class="${e.resolvido?'good':'bad'}">${esc(e.situacao)}</span> · Etapa ${esc(e.etapa)}</div>
