@@ -101,6 +101,11 @@ display:flex;align-items:center;justify-content:center;gap:4px;padding:0 5px
 .status{min-height:19px;margin-top:7px;text-align:center;color:var(--blue);font-weight:750;font-size:12px}
 .previews{display:flex;gap:7px;overflow:auto;margin-top:7px}
 .previews img{width:58px;height:58px;object-fit:cover;border-radius:9px;border:1px solid var(--line)}
+.view-tabs{display:flex;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:10px}
+.view-tabs button{flex:1;border:0;background:transparent;color:var(--muted);font-weight:850;font-size:12.5px;padding:8px 6px;border-radius:9px;display:flex;align-items:center;justify-content:center;gap:6px}
+.view-tabs button.on{background:#fff;color:var(--blue);box-shadow:0 2px 6px var(--shadow)}
+.tab-dot{width:9px;height:9px;border-radius:50%;background:#f08a24;display:none}
+.tab-dot.show{display:inline-block}
 .records-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .count{min-width:28px;height:28px;border-radius:14px;background:#e3eff9;color:var(--blue);
 display:grid;place-items:center;font-weight:900}
@@ -115,6 +120,9 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 .bad{font-weight:900;color:var(--red)}.good{font-weight:900;color:var(--blue)}
 .record-actions{display:flex;gap:7px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}
 .record-actions button{flex:1;min-width:0;padding:6px 4px;border-radius:9px;font-size:12px;font-weight:800;border:1px solid var(--line);background:#fff;line-height:1.2}
+.repeat{color:#b45f06;font-weight:800}
+.repeat .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#f08a24;margin-right:5px;vertical-align:middle}
+.again{color:#b45f06}
 .delete{color:var(--red)}.resolve{color:var(--blue)}.edit{color:var(--blue)}
 .edit-banner{display:none;align-items:center;justify-content:space-between;gap:8px;background:#fff7e6;border:1px solid #f0d39a;color:#8a5a00;border-radius:11px;padding:8px 10px;font-size:12.5px;font-weight:800;margin-bottom:4px}
 .edit-banner.show{display:flex}
@@ -208,8 +216,12 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </section>
 
 <section class="card">
+<div class="view-tabs">
+<button type="button" id="tabEtapa" class="on">📋 Por etapa</button>
+<button type="button" id="tabMes">📅 Mês passado<span class="tab-dot" id="mesDot"></span></button>
+</div>
 <div class="records-head">
-<h2>Registros da <span id="stageTitle">Etapa 1</span></h2>
+<h2 id="recTitle">Registros da <span id="stageTitle">Etapa 1</span></h2>
 <div class="count" id="count">0</div>
 </div>
 <div id="records"></div>
@@ -223,7 +235,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='2.3',APP_DATE='13/10/2026';
+const APP_VERSION='2.5',APP_DATE='14/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -291,21 +303,41 @@ function resetForm(){
  selectedFotos=[];renderPhotos();clearAutoFill();
  editingId=null;$('editBanner').classList.remove('show');$('formCard').classList.remove('editing')
 }
+let viewMode='etapa';
+function mesAtual(){return todayStr().slice(0,7)}
+function mesPassado(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+function pendentesMesPassado(){
+ const ant=mesPassado(),cur=mesAtual();
+ return entries.filter(e=>!e.resolvido&&mesesDe(e).includes(ant)&&!mesesDe(e).includes(cur))
+}
 function renderRecords(){
- const filtered=entries.filter(e=>Number(e.etapa)===Number(stage)).sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0));
- $('stageTitle').textContent=`Etapa ${stage}`;$('count').textContent=filtered.length;
- if(!filtered.length){$('records').innerHTML='<div class="empty">Nenhum registro nesta etapa.</div>';return}
+ const pend=pendentesMesPassado();
+ $('mesDot').classList.toggle('show',pend.length>0);
+ let filtered;
+ if(viewMode==='mes'){
+  filtered=pend.sort((a,b)=>(Number(a.etapa)-Number(b.etapa))||((b.ultimoLanc||b.criadoEm||0)-(a.ultimoLanc||a.criadoEm||0)));
+  $('recTitle').textContent=`Pendentes de ${fmtMes(mesPassado())}`;
+ }else{
+  filtered=entries.filter(e=>Number(e.etapa)===Number(stage)).sort((a,b)=>(b.ultimoLanc||b.criadoEm||0)-(a.ultimoLanc||a.criadoEm||0));
+  $('recTitle').innerHTML=`Registros da <span id="stageTitle">Etapa ${stage}</span>`;
+ }
+ $('count').textContent=filtered.length;
+ if(!filtered.length){$('records').innerHTML=viewMode==='mes'
+  ?`<div class="empty">Nenhum pendente de ${fmtMes(mesPassado())} para passar para ${fmtMes(mesAtual())}.</div>`
+  :'<div class="empty">Nenhum registro nesta etapa.</div>';return}
  $('records').innerHTML=filtered.map(e=>`<article class="record ${e.resolvido?'resolved':''}">
  <div class="record-top"><div class="code">${esc(e.codigo)}</div><div class="date">${esc(fmtDate(e.data))}</div></div>
+ ${linhaMeses(e)}
  ${(e.endereco||e.numero)?`<div class="meta">📍 <strong>${esc(fmtEndereco(e))}</strong></div>`:''}
  <div class="meta">Medidor <strong>${esc(e.medidor)}</strong> · <span class="${e.resolvido?'good':'bad'}">${esc(e.situacao)}</span> · Etapa ${esc(e.etapa)}</div>
  <div class="meta">Leitura: <strong>${esc((e.leituras||[]).length?(e.leituras||[]).join(' / '):'—')}</strong></div>
  <div class="meta">Apontado por: <strong>${esc(e.apontadoPor||'—')}</strong></div>
- <div class="meta">Lançado em ${esc(fmtDateTime(e.criadoEm))}</div>
+ <div class="meta">Primeiro registro em ${esc(fmtDateTime(e.criadoEm))}</div>
  ${e.editadoEm?`<div class="meta">Editado em ${esc(fmtDateTime(e.editadoEm))}${e.editadoPor?' por '+esc(e.editadoPor):''}</div>`:''}
  ${e.obs?`<div class="meta">Obs.: ${esc(e.obs)}</div>`:''}
  ${e.fotos?.length?`<div class="previews">${e.fotos.map(x=>`<img src="${x}" alt="Foto do registro">`).join('')}</div>`:''}
  <div class="record-actions"><button class="edit" type="button" onclick="editEntry('${esc(e.id)}')">✏️ Editar</button>
+ ${e.resolvido?'':`<button class="again" type="button" onclick="relaunch('${esc(e.id)}')">${viewMode==='mes'?'➡️ Passar p/ '+fmtMes(mesAtual()):'🔁 Lançar de novo'}</button>`}
  <button class="resolve" type="button" onclick="toggleResolved('${esc(e.id)}')">${e.resolvido?'↩️ Reabrir':'✅ Resolver'}</button>
  <button class="delete" type="button" onclick="deleteEntry('${esc(e.id)}')">🗑️ Excluir</button></div>
  </article>`).join('')
@@ -323,6 +355,14 @@ window.editEntry=id=>{
  $('status').textContent='Altere o que precisar e toque em Salvar.';$('status').style.color='var(--blue)';
  window.scrollTo({top:0,behavior:'smooth'})
 };
+window.relaunch=id=>{
+ const e=entries.find(x=>x.id===id);if(!e)return;
+ const hoje=todayStr(),mes=hoje.slice(0,7);
+ if(mesesDe(e).includes(mes)){alert('Este medidor já foi lançado neste mês ('+fmtMes(mes)+').');return}
+ if(!confirm(`Passar o medidor ${e.medidor} para ${fmtMes(mes)}? (continua pendente)`))return;
+ addLancamento(e,hoje);saveData();renderRecords();
+ $('status').textContent=`Passado para ${fmtMes(mes)}. Já são ${mesesDe(e).length} meses sem resolver.`;$('status').style.color='var(--blue)'
+};
 window.deleteEntry=id=>{
  if(!confirm('Excluir este registro?'))return;
  if(editingId===id)resetForm();
@@ -333,14 +373,30 @@ window.toggleResolved=id=>{
  e.resolvido=!e.resolvido;e.resolvidoEm=e.resolvido?Date.now():null;
  saveData();renderRecords()
 }
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function lancs(e){const l=(e.lancamentos&&e.lancamentos.length)?e.lancamentos:[e.data||todayStr()];return l.slice().sort()}
+function mesesDe(e){return [...new Set(lancs(e).map(d=>String(d).slice(0,7)))]}
+function fmtMes(ym){const [y,m]=ym.split('-');return MESES[Number(m)-1]+'/'+y.slice(2)}
+function linhaMeses(e){
+ const ms=mesesDe(e),lista=ms.map(fmtMes).join(', ');
+ if(e.resolvido)return ms.length>1?`<div class="meta">Resolvido depois de ${ms.length} meses lançado (${lista})</div>`:'';
+ if(ms.length>1)return `<div class="meta repeat"><span class="dot"></span>Lançado em ${ms.length} meses sem resolver: ${lista}</div>`;
+ return `<div class="meta">Lançado em ${lista}</div>`
+}
+function addLancamento(e,data){
+ e.lancamentos=lancs(e);
+ const mes=data.slice(0,7);
+ if(!e.lancamentos.some(d=>d.slice(0,7)===mes))e.lancamentos.push(data);
+ e.lancamentos.sort();e.data=data;e.ultimoLanc=Date.now()
+}
 function fmtEndereco(e){return [e.endereco||'',e.numero?('nº '+e.numero):''].filter(Boolean).join(', ')}
 function csvCell(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
 function exportCSV(){
  if(!entries.length){alert('Não há registros para exportar.');return}
- const rows=[['Código do cliente','Endereço','Número','Número do medidor','Leituras','Situação','Etapa','Data','Lançado em','Observações','Qtd. fotos','Status','Resolvido em','Apontado por','Editado em','Editado por'],
+ const rows=[['Código do cliente','Endereço','Número','Número do medidor','Leituras','Situação','Etapa','Data','Lançado em','Observações','Qtd. fotos','Status','Resolvido em','Apontado por','Editado em','Editado por','Meses lançado','Meses'],
  ...entries.slice().sort((a,b)=>(Number(a.etapa)-Number(b.etapa))||(b.criadoEm-a.criadoEm))
  .map(e=>[e.codigo,e.endereco||'',e.numero||'',e.medidor,(e.leituras||[]).join(' / '),e.situacao,e.etapa,fmtDate(e.data),fmtDateTime(e.criadoEm),
- e.obs||'',(e.fotos||[]).length,e.resolvido?'Resolvido':'Pendente',e.resolvidoEm?fmtDateTime(e.resolvidoEm):'',e.apontadoPor||'',e.editadoEm?fmtDateTime(e.editadoEm):'',e.editadoPor||''])];
+ e.obs||'',(e.fotos||[]).length,e.resolvido?'Resolvido':'Pendente',e.resolvidoEm?fmtDateTime(e.resolvidoEm):'',e.apontadoPor||'',e.editadoEm?fmtDateTime(e.editadoEm):'',e.editadoPor||'',mesesDe(e).length,mesesDe(e).map(fmtMes).join(', ')])];
  const csv='\uFEFF'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),a=document.createElement('a');
  a.href=URL.createObjectURL(blob);a.download=`registros-todas-etapas-${todayStr()}.csv`;
@@ -364,7 +420,10 @@ function shareApp(){
 $('medidor').addEventListener('focus',()=>{
  $('medidor').setAttribute('inputmode','text');$('medidor').setAttribute('type','search')
 });
-$('etapa').addEventListener('change',e=>{stage=Number(e.target.value);renderRecords()});
+$('etapa').addEventListener('change',e=>{stage=Number(e.target.value);setView('etapa')});
+function setView(v){viewMode=v;$('tabEtapa').classList.toggle('on',v==='etapa');$('tabMes').classList.toggle('on',v==='mes');renderRecords()}
+$('tabEtapa').onclick=()=>setView('etapa');
+$('tabMes').onclick=()=>setView('mes');
 $('situacao').addEventListener('change',e=>setSituation(e.target.value));
 $('addReading').onclick=()=>{readings.push('');renderReadings()};
 $('cameraBtn').onclick=()=>{
@@ -592,11 +651,28 @@ $('saveBtn').onclick=()=>{
   saveData();resetForm();renderRecords();
   $('status').textContent='Alterações salvas.';$('status').style.color='var(--blue)';return
  }
+ const dataL=$('data').value||todayStr(),norm=v=>String(v||'').replace(/\s/g,'').toUpperCase();
+ const ant=entries.find(x=>!x.resolvido&&((norm(x.medidor)&&norm(x.medidor)===norm(medidor))||(norm(x.codigo)&&norm(x.codigo)===norm(codigo))));
+ if(ant){
+  const msAnt=mesesDe(ant).map(fmtMes).join(', '),mesmoMes=mesesDe(ant).includes(dataL.slice(0,7));
+  const msg=mesmoMes
+   ?`Esse medidor/código já foi lançado neste mês (${msAnt}) e está pendente. Atualizar o registro que já existe?`
+   :`Esse medidor/código já foi lançado em ${msAnt} e ainda não foi resolvido. Contar mais este mês no mesmo registro?`;
+  if(confirm(msg)){
+   Object.assign(ant,{codigo,endereco:endereco||ant.endereco,numero:numero||ant.numero,medidor,
+    leituras:leituras.length?leituras:ant.leituras,situacao:selectedSituacao,etapa:stage,
+    obs:$('obs').value.trim()||ant.obs,fotos:(ant.fotos||[]).concat(selectedFotos),
+    editadoEm:Date.now(),editadoPor:apontadoPor});
+   addLancamento(ant,dataL);saveData();resetForm();renderRecords();
+   const n=mesesDe(ant).length;
+   $('status').textContent=n>1?`Somado ao registro. Já são ${n} meses sem resolver.`:'Registro atualizado.';$('status').style.color='var(--blue)';return
+  }
+ }
  entries.push({
   id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),
   codigo,endereco,numero,medidor,leituras,situacao:selectedSituacao,etapa:stage,apontadoPor,
   data:$('data').value||todayStr(),obs:$('obs').value.trim(),
-  fotos:selectedFotos.slice(),resolvido:false,resolvidoEm:null,criadoEm:Date.now()
+  fotos:selectedFotos.slice(),resolvido:false,resolvidoEm:null,criadoEm:Date.now(),lancamentos:[dataL],ultimoLanc:Date.now()
  });
  saveData();resetForm();renderRecords();
  $('status').textContent=`Registro salvo na Etapa ${stage}.`;$('status').style.color='var(--blue)'
