@@ -61,6 +61,8 @@ width:39px;height:42px;border:1px solid var(--line);background:var(--panel2);
 color:var(--blue);border-radius:11px;font-size:20px;font-weight:900;flex:0 0 auto
 }
 .stage-row select{height:42px;font-weight:800;flex:1}
+.cal-tag{display:none;font-size:10.5px;font-weight:800;color:#1f8a4c;background:#e8f6ee;border:1px solid #bfe5cf;border-radius:999px;padding:1px 7px;margin-left:5px;vertical-align:middle}
+.cal-tag.show{display:inline-block}
 .addr-row{display:flex;gap:7px}.addr-street{flex:1;min-width:0}.addr-num{width:88px;flex:0 0 auto}
 .reading-row{display:flex;gap:7px;margin-bottom:7px}
 .reading-row input{flex:1}
@@ -212,7 +214,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <textarea id="obs" placeholder="Digite uma observação, se necessário"></textarea>
 
 <div class="stage-inline">
-<label for="etapa">Etapa</label>
+<label for="etapa">Etapa <span class="cal-tag" id="calTag">📅 pelo calendário</span></label>
 <select id="etapa"></select>
 </div>
 
@@ -250,7 +252,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='3.3',APP_DATE='14/10/2026';
+const APP_VERSION='3.7',APP_DATE='14/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -312,10 +314,39 @@ async function addPhotos(files){
  for(const f of Array.from(files||[]))if(f.type.startsWith('image/'))selectedFotos.push(await compress(f));
  renderPhotos()
 }
+/* Calendário de leitura: dia de cada etapa (01 a 18) em cada mês */
+const CALENDARIO={
+'2025-12':[3,4,5,8,9,10,11,12,15,16,17,18,19,22,23,24,26,27],
+'2026-01':[2,5,6,7,8,9,12,13,14,15,16,19,20,21,22,23,26,27],
+'2026-02':[2,3,4,5,6,9,10,11,12,13,16,17,18,19,20,23,24,25],
+'2026-03':[4,5,6,9,10,11,12,13,16,17,18,19,20,23,24,25,26,27],
+'2026-04':[1,2,6,7,8,9,10,11,13,14,15,16,17,20,22,23,24,27],
+'2026-05':[4,5,6,7,8,11,12,13,14,15,18,19,20,21,22,25,26,27],
+'2026-06':[2,3,5,8,9,10,11,12,15,16,17,18,19,22,23,24,25,26],
+'2026-07':[2,3,6,7,8,10,13,14,15,16,17,20,21,22,23,24,27,28],
+'2026-08':[3,4,5,6,7,10,11,12,13,14,17,18,19,20,21,24,25,26],
+'2026-09':[2,3,4,8,9,10,11,14,15,16,17,18,21,22,23,24,25,28],
+'2026-10':[1,2,5,6,7,8,9,13,14,15,16,19,20,21,22,23,26,27],
+'2026-11':[3,4,5,6,7,9,10,11,12,13,16,17,18,19,23,24,25,26],
+'2026-12':[2,3,4,7,9,10,11,14,15,16,17,18,21,22,23,24,26,28]
+};
+const CAL_LIST=Object.entries(CALENDARIO).flatMap(([ym,dias])=>dias.map((d,i)=>({data:ym+'-'+String(d).padStart(2,'0'),etapa:i+1}))).sort((a,b)=>a.data<b.data?-1:1);
+function etapaDoCalendario(data){
+ let achou=null;for(const c of CAL_LIST){if(c.data<=data)achou=c;else break}
+ if(!achou)return null;
+ const dias=(new Date(data+'T12:00')-new Date(achou.data+'T12:00'))/864e5;
+ return dias<=10?achou.etapa:null
+}
+function aplicarCalendario(){
+ if(editingId)return;
+ const e=etapaDoCalendario($('data').value||todayStr());
+ $('calTag').classList.toggle('show',!!e);
+ if(e&&e!==stage){stage=e;$('etapa').value=e;if(viewMode==='etapa')renderRecords()}
+}
 function resetForm(){
  $('codigo').value='';$('endereco').value='';$('numero').value='';$('medidor').value='';readings=[''];renderReadings();
- setSituation('');$('data').value=todayStr();$('obs').value='';
- selectedFotos=[];renderPhotos();clearAutoFill();
+ setSituation('');$('data').value=todayStr();$('obs').value='';aplicarCalendario();
+ selectedFotos=[];renderPhotos();clearAutoFill();$('pdaText').textContent='';$('pdaRaw').style.display='none';
  editingId=null;$('editBanner').classList.remove('show');$('formCard').classList.remove('editing')
 }
 let viewMode='etapa',visibleList=[];
@@ -474,7 +505,7 @@ function shareApp(){
 $('medidor').addEventListener('focus',()=>{
  $('medidor').setAttribute('inputmode','text');$('medidor').setAttribute('type','search')
 });
-$('etapa').addEventListener('change',e=>{stage=Number(e.target.value);setView('etapa')});
+$('etapa').addEventListener('change',e=>{stage=Number(e.target.value);$('calTag').classList.toggle('show',stage===etapaDoCalendario($('data').value||todayStr()));setView('etapa')});
 function setView(v){viewMode=v;$('tabEtapa').classList.toggle('on',v==='etapa');$('tabMes').classList.toggle('on',v==='mes');renderRecords()}
 $('tabEtapa').onclick=()=>setView('etapa');
 $('tabMes').onclick=()=>setView('mes');
@@ -563,7 +594,7 @@ function prepImage(file,maxSide=3200,k=10){
    const scale=Math.min(2,maxSide/Math.max(img.width,img.height))||1,c=document.createElement('canvas');
    const W=c.width=Math.round(img.width*scale),H=c.height=Math.round(img.height*scale);
    const g=c.getContext('2d');g.drawImage(img,0,0,W,H);
-   const d=g.getImageData(0,0,W,H),px=d.data,lum=new Float32Array(W*H),S=new Float64Array((W+1)*(H+1));
+   const d=g.getImageData(0,0,W,H),px=d.data,lum=new Uint8Array(W*H),S=new Uint32Array((W+1)*(H+1));
    for(let i=0,j=0;i<px.length;i+=4,j++)lum[j]=.299*px[i]+.587*px[i+1]+.114*px[i+2];
    for(let y=0;y<H;y++){let row=0;for(let x=0;x<W;x++){row+=lum[y*W+x];S[(y+1)*(W+1)+x+1]=S[y*(W+1)+x+1]+row}}
    const r=Math.max(8,Math.round(W/44));
@@ -618,7 +649,8 @@ function parsePDA(text){
   if(idx>=0){const m=lines[idx].match(RUA_ANY);addr=lines[idx].slice(m.index+m[1].length)}
   else{
    idx=lines.findIndex(l=>/[A-ZÀ-Ú]{3,}( [A-ZÀ-Ú]{2,})+,\s*\d{1,5}\b/.test(l)&&!/\b(UC|MD)\s*[:;]/.test(l));
-   if(idx>=0){const m=lines[idx].match(/[A-ZÀ-Ú]{3,}( [A-ZÀ-Ú]{2,})+,\s*\d{1,5}\b.*/);addr=m[0].replace(/^R(?=[^AEIOUÁÉÍÓÚÂÊÔÃÕH\s][A-ZÀ-Ú]{3,})/,'R ')}
+   if(idx>=0){const m=lines[idx].match(/[A-ZÀ-Ú]{3,}( [A-ZÀ-Ú]{2,})+,\s*\d{1,5}\b.*/);addr=m[0].replace(/^R(?=[^AEIOUÁÉÍÓÚÂÊÔÃÕH\s][A-ZÀ-Ú]{3,})/,'R ');
+    if(!/^R\s/.test(addr)&&/(^|\s)\S{0,2}R\.?\s*$/.test(lines[idx].slice(0,m.index)))addr='R '+addr}
   }
  }
  if(addr){
@@ -644,11 +676,8 @@ function parsePDA(text){
    bairro=parts.slice(1).join(', ')
   }
   const CURTAS=['JD','VL','PQ','DE','DA','DO','DOS','DAS','E','STA','STO','SAO','SÃO','RES','CJ','NS','N','SR','SRA','BOA','SOL','LUZ','REI','PAZ','DR','JD.','VL.','PQ.'];
-  if(bairro){
-   const bt=bairro.split(' '),keep=[];
-   for(const w of bt){const u=w.replace(/[.,]/g,'');if(/^\d+$/.test(u)||(u.length<=3&&!CURTAS.includes(u)&&!CURTAS.includes(w)))break;keep.push(w)}
-   bairro=keep.join(' ').replace(/[,.\s]+$/,'')
-  }
+  const limpa=t=>{const keep=[];for(const w of String(t||'').split(' ')){const u=w.replace(/[.,]/g,'');if(!u)continue;if(/^\d+$/.test(u)||(u.length<=3&&!CURTAS.includes(u)&&!CURTAS.includes(w)))break;keep.push(w)}return keep.join(' ').replace(/[,.\s]+$/,'')};
+  bairro=limpa(bairro);nx=limpa(nx);
   rua=rua.replace(/\s+-\s+.*$/,'').trim();
   if(nx)bairro=(bairro?bairro+' ':'')+nx;
   if(rua.length>2)out.endereco=expandAbrev(rua)+(bairro?' – '+expandAbrev(bairro):'');
@@ -660,7 +689,7 @@ function parsePDA(text){
  }
  // Leitura: só se tiver número escrito no campo (ignora "Capac. Leit." e "Leitura anterior")
  for(const l of lines){
-  if(/capac|ant|m[eé]dia/i.test(l))continue;
+  if(/capac|ant|m[eé]dia|msg/i.test(l))continue;
   const m=l.match(/\bleitura\b\s*(atual)?\s*[:\-=]?\s*(\d{1,7})\b/i);
   if(m){out.leitura=m[2];break}
  }
@@ -675,7 +704,7 @@ function mergePDA(rs){
  return{
   codigo:pick('codigo',v=>v.length),
   medidor:pick('medidor',v=>(/^[A-Z]/.test(v)?100:0)+v.length),
-  endereco:pick('endereco',v=>v.length),
+  endereco:(rs.find(r=>r.endereco&&/–/.test(r.endereco))||rs.find(r=>r.endereco)||{}).endereco,
   numero:pick('numero',v=>v.length),
   leitura:pick('leitura',v=>v.length)
  }
@@ -689,7 +718,7 @@ async function readPDA(file){
  say('Lendo a tela do PDA. Na primeira vez demora um pouco mais.');setPdaProgress(.02);
  try{
   const w=await getWorker(),texts=[];
-  ocrPass=0;texts.push((await w.recognize(await prepImage(file,3200,10))).data.text||'');
+  ocrPass=0;texts.push((await w.recognize(await prepImage(file,2600,10))).data.text||'');
   ocrPass=1;texts.push((await w.recognize(await prepImage(file,2000,18))).data.text||'');
   $('pdaText').textContent=texts.map(t=>t.trim()).join('\n\n— 2ª leitura —\n\n')||'(nenhum texto encontrado)';$('pdaRaw').style.display='block';
   const r=mergePDA(texts.map(parsePDA)),got=[];
@@ -702,7 +731,10 @@ async function readPDA(file){
   if(got.length)say(`Preenchido: ${got.join(', ')}. Confira os campos em amarelo e escolha a situação.`)
   else say('Não consegui identificar os campos. Abra "Ver texto lido da foto" e tente outra foto mais de perto.',true)
  }catch(e){
-  say('Não deu para ler a foto. Na primeira vez precisa de internet.',true)
+  const why=String((e&&(e.message||e.type))||e||'');
+  say(!window.Tesseract||/load|network|fetch|script/i.test(why)
+   ?'Não consegui baixar o leitor da foto. Confira a internet e tente de novo.'
+   :'Não deu para ler a foto ('+why.slice(0,60)+'). Tente de novo.',true)
  }finally{
   btn.disabled=false;btn.textContent='📟';
   setTimeout(()=>$('pdaBar').classList.remove('show'),500)
@@ -763,7 +795,8 @@ $('saveBtn').onclick=()=>{
 $('versionTag').textContent=`Versão ${APP_VERSION} · ${APP_DATE}`;$('hdrVersion').textContent=`v${APP_VERSION}`;
 try{$('apontador').value=localStorage.getItem(KEY_APONTADOR)||''}catch(e){}
 $('apontador').addEventListener('input',e=>{try{localStorage.setItem(KEY_APONTADOR,e.target.value.trim())}catch(_){}});
-loadData();renderStages();renderReadings();$('data').value=todayStr();renderRecords();
+loadData();renderStages();renderReadings();$('data').value=todayStr();aplicarCalendario();renderRecords();
+$('data').addEventListener('change',aplicarCalendario);
 </script>
 </body>
 </html>
