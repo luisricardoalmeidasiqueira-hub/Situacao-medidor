@@ -252,7 +252,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='3.7',APP_DATE='14/10/2026';
+const APP_VERSION='3.8',APP_DATE='15/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -270,7 +270,7 @@ function fmtDateTime(ts){
 }
 function saveData(){try{localStorage.setItem(KEY,JSON.stringify(entries))}catch(e){}}
 function loadData(){
- try{const raw=localStorage.getItem(KEY);entries=raw?JSON.parse(raw):[];if(!Array.isArray(entries))entries=[];entries.forEach(e=>{if(e.situacao==='Medidor carbonizado')e.situacao='Carbonizado'})}
+ try{const raw=localStorage.getItem(KEY);entries=raw?JSON.parse(raw):[];if(!Array.isArray(entries))entries=[];entries.forEach(e=>{if(e.situacao==='Medidor carbonizado')e.situacao='Carbonizado';if(e.endereco)e.endereco=corrigeEndereco(e.endereco)})}
  catch(e){entries=[]}
 }
 function renderStages(){
@@ -709,6 +709,37 @@ function mergePDA(rs){
   leitura:pick('leitura',v=>v.length)
  }
 }
+/* ===== Correção de bairros/ruas lidos errado do PDA ===== */
+const KEY_CORR='situacao-medidor-correcoes-endereco';
+const BAIRROS_FIXOS=[
+ {re:/(jd|jardim)?\s*(s(an)?ta\.?\s*)?(r(ita)?\.?\s*)?(ja\s*)?(de\s*)?c[aá]ss?ia\b/i,certo:'Jardim Santa Rita de Cássia'}
+];
+function normTxt(t){return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()}
+function getCorr(){try{return JSON.parse(localStorage.getItem(KEY_CORR)||'{}')||{}}catch(_){return{}}}
+function setCorr(c){try{localStorage.setItem(KEY_CORR,JSON.stringify(c))}catch(_){}}
+function corrigeParte(t){
+ if(!t)return t;
+ const c=getCorr(),k=normTxt(t);
+ if(c[k])return c[k];
+ for(const f of BAIRROS_FIXOS)if(f.re.test(t))return f.certo;
+ return t
+}
+function corrigeEndereco(end){
+ if(!end)return end;
+ const [rua,...resto]=String(end).split(' – '),bairro=resto.join(' – ');
+ const r2=corrigeParte(rua),b2=bairro?corrigeParte(bairro):'';
+ return r2+(b2?' – '+b2:'')
+}
+/* guarda a correção quando a pessoa arruma na mão o endereço lido da foto */
+let pdaEndereco='';
+function aprendeCorrecao(lido,salvo){
+ if(!lido||!salvo||lido===salvo)return;
+ const [r1,...b1]=lido.split(' – '),[r2,...b2]=salvo.split(' – ');
+ const c=getCorr();let mudou=false;
+ const par=(a,b)=>{if(a&&b&&normTxt(a)!==normTxt(b)){c[normTxt(a)]=b.trim();mudou=true}};
+ par(r1,r2);par(b1.join(' – '),b2.join(' – '));
+ if(mudou)setCorr(c)
+}
 function markAuto(id){$(id).classList.add('auto-filled')}
 function clearAutoFill(){document.querySelectorAll('.auto-filled').forEach(el=>el.classList.remove('auto-filled'))}
 document.addEventListener('input',e=>{if(e.target.classList&&e.target.classList.contains('auto-filled'))e.target.classList.remove('auto-filled')});
@@ -724,7 +755,7 @@ async function readPDA(file){
   const r=mergePDA(texts.map(parsePDA)),got=[];
   clearAutoFill();
   if(r.codigo){$('codigo').value=r.codigo;markAuto('codigo');got.push('código')}
-  if(r.endereco){$('endereco').value=r.endereco;markAuto('endereco');got.push('endereço')}
+  if(r.endereco){pdaEndereco=corrigeEndereco(r.endereco);$('endereco').value=pdaEndereco;markAuto('endereco');got.push('endereço')}
   if(r.numero){$('numero').value=r.numero;markAuto('numero');got.push('nº')}
   if(r.medidor){$('medidor').value=r.medidor;markAuto('medidor');got.push('medidor')}
   if(r.leitura){readings=[r.leitura];renderReadings();document.querySelector('.reading').classList.add('auto-filled');got.push('leitura')}
@@ -749,6 +780,7 @@ $('previews').addEventListener('click',ev=>{
  selectedFotos.splice(Number(img.dataset.i),1);renderPhotos()
 });
 $('saveBtn').onclick=()=>{
+ aprendeCorrecao(pdaEndereco,$('endereco').value.trim());pdaEndereco='';
  const apontadoPor=$('apontador').value.trim(),codigo=$('codigo').value.trim(),endereco=$('endereco').value.trim(),numero=$('numero').value.trim(),medidor=$('medidor').value.trim(),
  leituras=readings.map(x=>x.trim()).filter(Boolean);
  if(!apontadoPor||!codigo||!medidor||!selectedSituacao){
