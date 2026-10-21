@@ -110,7 +110,7 @@ display:flex;align-items:center;justify-content:center;gap:4px;padding:0 5px
 .previews{display:flex;gap:7px;overflow:auto;margin-top:7px}
 .previews img{width:58px;height:58px;object-fit:cover;border-radius:9px;border:1px solid var(--line)}
 .view-tabs{display:flex;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:10px}
-.view-tabs button{flex:1;border:0;background:transparent;color:var(--muted);font-weight:850;font-size:12px;padding:6px 5px;border-radius:9px;display:flex;align-items:center;justify-content:center;gap:6px}
+.view-tabs button{flex:1;border:0;background:transparent;color:var(--muted);font-weight:850;font-size:11.5px;padding:6px 3px;white-space:nowrap;border-radius:9px;display:flex;align-items:center;justify-content:center;gap:6px}
 .view-tabs button.on{background:#fff;color:var(--blue);box-shadow:0 2px 6px var(--shadow)}
 .tab-dot{width:9px;height:9px;border-radius:50%;background:#f08a24;display:none}
 .tab-dot.show{display:inline-block}
@@ -237,6 +237,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <section class="card">
 <div class="view-tabs">
 <button type="button" id="tabEtapa" class="on">📋 Por etapa</button>
+<button type="button" id="tabEsteMes">🗓️ Este mês</button>
 <button type="button" id="tabMes">📅 Mês passado<span class="tab-dot" id="mesDot"></span></button>
 </div>
 <div class="records-head">
@@ -254,7 +255,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='4.0',APP_DATE='21/10/2026';
+const APP_VERSION='4.1',APP_DATE='21/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -364,7 +365,11 @@ function renderRecords(){
  const pend=pendentesMesPassado();
  $('mesDot').classList.toggle('show',pend.length>0);
  let filtered;
- if(viewMode==='mes'){
+ if(viewMode==='esteMes'){
+  const cur=mesAtual();
+  filtered=entries.filter(e=>mesesDe(e).includes(cur)).sort((a,b)=>(Number(a.etapa)-Number(b.etapa))||((b.ultimoLanc||b.criadoEm||0)-(a.ultimoLanc||a.criadoEm||0)));
+  $('recTitle').textContent=`Lançados em ${fmtMes(cur)}`;
+ }else if(viewMode==='mes'){
   filtered=pend.sort((a,b)=>(Number(a.etapa)-Number(b.etapa))||((b.ultimoLanc||b.criadoEm||0)-(a.ultimoLanc||a.criadoEm||0)));
   $('recTitle').textContent=`Pendentes de ${fmtMes(mesPassado())}`;
  }else{
@@ -374,6 +379,7 @@ function renderRecords(){
  $('count').textContent=filtered.length;visibleList=filtered.slice();
  if(!filtered.length){$('records').innerHTML=viewMode==='mes'
   ?`<div class="empty">Nenhum pendente de ${fmtMes(mesPassado())} para passar para ${fmtMes(mesAtual())}.</div>`
+  :viewMode==='esteMes'?`<div class="empty">Nenhum lançamento em ${fmtMes(mesAtual())} ainda.</div>`
   :'<div class="empty">Nenhum registro nesta etapa.</div>';return}
  $('records').innerHTML=filtered.map(e=>{
  const leit=(e.leituras||[]).length?(e.leituras||[]).join(' / '):'',ms=mesesDe(e);
@@ -389,7 +395,7 @@ function renderRecords(){
  ${e.fotos?.length?`<div class="previews">${e.fotos.map(x=>`<img src="${x}" alt="Foto do registro">`).join('')}</div>`:''}
  <div class="meta small">${reg}</div>
  <div class="record-actions"><button class="edit" type="button" onclick="editEntry('${esc(e.id)}')"><b>✏️</b>Editar</button>
- ${e.resolvido?'':`<button class="again" type="button" onclick="relaunch('${esc(e.id)}')"><b>${viewMode==='mes'?'➡️':'🔁'}</b>${viewMode==='mes'?'Passar':'Lançar'}</button>`}
+ ${e.resolvido||viewMode==='esteMes'?'':`<button class="again" type="button" onclick="relaunch('${esc(e.id)}')"><b>${viewMode==='mes'?'➡️':'🔁'}</b>${viewMode==='mes'?'Passar':'Lançar'}</button>`}
  <button class="resolve" type="button" onclick="toggleResolved('${esc(e.id)}')"><b>${e.resolvido?'↩️':'✅'}</b>${e.resolvido?'Reabrir':'Resolver'}</button>
  <button class="share" type="button" onclick="shareEntry('${esc(e.id)}')"><b>📤</b>Enviar</button>
  <button class="delete" type="button" onclick="deleteEntry('${esc(e.id)}')"><b>🗑️</b>Excluir</button></div>
@@ -449,7 +455,7 @@ window.shareEntry=id=>{
 };
 function shareList(){
  if(!visibleList.length){alert('Não há registros nesta lista.');return}
- const titulo=viewMode==='mes'?`📋 Pendentes de ${fmtMes(mesPassado())}`:`📋 Registros da Etapa ${stage}`;
+ const titulo=viewMode==='mes'?`📋 Pendentes de ${fmtMes(mesPassado())}`:viewMode==='esteMes'?`📋 Lançados em ${fmtMes(mesAtual())}`:`📋 Registros da Etapa ${stage}`;
  shareText('Situação do medidor',titulo+'\n\n'+visibleList.map(textoRegistro).join('\n\n— — —\n\n'))
 }
 window.deleteEntry=id=>{
@@ -510,9 +516,10 @@ $('medidor').addEventListener('focus',()=>{
  $('medidor').setAttribute('inputmode','text');$('medidor').setAttribute('type','search')
 });
 $('etapa').addEventListener('change',e=>{stage=Number(e.target.value);$('calTag').classList.toggle('show',stage===etapaDoCalendario($('data').value||todayStr()));setView('etapa')});
-function setView(v){viewMode=v;$('tabEtapa').classList.toggle('on',v==='etapa');$('tabMes').classList.toggle('on',v==='mes');renderRecords()}
+function setView(v){viewMode=v;$('tabEtapa').classList.toggle('on',v==='etapa');$('tabEsteMes').classList.toggle('on',v==='esteMes');$('tabMes').classList.toggle('on',v==='mes');renderRecords()}
 $('tabEtapa').onclick=()=>setView('etapa');
 $('tabMes').onclick=()=>setView('mes');
+$('tabEsteMes').onclick=()=>setView('esteMes');
 $('shareListBtn').onclick=shareList;
 $('situacao').addEventListener('change',e=>setSituation(e.target.value));
 $('addReading').onclick=()=>{readings.push('');renderReadings()};
