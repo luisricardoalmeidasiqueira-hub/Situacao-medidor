@@ -133,6 +133,8 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 .rec-compact{padding:9px 10px}
 .rec-compact .code{font-size:15.5px}
 .rec-compact .meta{margin-top:2px;font-size:12px;line-height:1.35}
+.addr-line{font-size:12.5px}
+.sem-end{color:#b45f06;cursor:pointer}
 .meta.small{font-size:11px;color:#8597a6}
 .head-actions{display:flex;align-items:center;gap:7px}
 .share-list{border:1px solid var(--line);background:#fff;color:#1f8a4c;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:850}
@@ -252,7 +254,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='3.8',APP_DATE='15/10/2026';
+const APP_VERSION='3.9',APP_DATE='21/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -377,8 +379,8 @@ function renderRecords(){
  const reg=`Registrado ${esc(fmtDateTime(e.criadoEm))}`+(e.editadoEm?` · editado ${esc(fmtDateTime(e.editadoEm))}${e.editadoPor?' por '+esc(e.editadoPor):''}`:'');
  return `<article class="record rec-compact ${e.resolvido?'resolved':''}">
  <div class="record-top"><div class="code">${esc(e.codigo)}</div><div class="top-right">${!e.resolvido&&ms.length>1?`<span class="mes-chip">${ms.length} meses</span>`:''}<div class="date">${esc(fmtDate(e.data))}</div></div></div>
+ ${(e.endereco||e.numero)?`<div class="meta addr-line">📍 <strong>${esc(fmtEndereco(e))}</strong></div>`:`<div class="meta addr-line sem-end" onclick="editEntry('${esc(e.id)}',true)">📍 Sem endereço · <u>toque para adicionar</u></div>`}
  <div class="meta">Medidor <strong>${esc(e.medidor)}</strong> · <span class="${e.resolvido?'good':'bad'}">${esc(e.situacao)}</span> · Etapa ${esc(e.etapa)}</div>
- ${(e.endereco||e.numero)?`<div class="meta">📍 <strong>${esc(fmtEndereco(e))}</strong></div>`:''}
  ${ms.length>1||e.resolvido?linhaMeses(e):''}
  ${info?`<div class="meta">${info}</div>`:''}
  ${e.obs?`<div class="meta">Obs.: ${esc(e.obs)}</div>`:''}
@@ -391,7 +393,7 @@ function renderRecords(){
  <button class="delete" type="button" onclick="deleteEntry('${esc(e.id)}')"><b>🗑️</b>Excluir</button></div>
  </article>`}).join('')
 }
-window.editEntry=id=>{
+window.editEntry=(id,focoEnd)=>{
  const e=entries.find(x=>x.id===id);if(!e)return;
  editingId=id;
  $('codigo').value=e.codigo||'';$('endereco').value=e.endereco||'';$('numero').value=e.numero||'';$('medidor').value=e.medidor||'';
@@ -402,7 +404,7 @@ window.editEntry=id=>{
  $('editText').textContent=`✏️ Editando código ${e.codigo}`;
  $('editBanner').classList.add('show');$('formCard').classList.add('editing');
  $('status').textContent='Altere o que precisar e toque em Salvar.';$('status').style.color='var(--blue)';
- window.scrollTo({top:0,behavior:'smooth'})
+ if(focoEnd){setTimeout(()=>{$('endereco').scrollIntoView({behavior:'smooth',block:'center'});$('endereco').focus()},50)}else window.scrollTo({top:0,behavior:'smooth'})
 };
 window.relaunch=id=>{
  const e=entries.find(x=>x.id===id);if(!e)return;
