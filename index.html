@@ -254,7 +254,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='3.9',APP_DATE='21/10/2026';
+const APP_VERSION='4.0',APP_DATE='21/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -276,7 +276,8 @@ function loadData(){
  catch(e){entries=[]}
 }
 function renderStages(){
- $('etapa').innerHTML=stages.map(n=>`<option value="${n}">Etapa ${n}</option>`).join('');
+ const pend=new Set(entries.filter(e=>!e.resolvido).map(e=>Number(e.etapa)));
+ $('etapa').innerHTML=stages.map(n=>`<option value="${n}">Etapa ${n}${pend.has(n)?' 🟠':''}</option>`).join('');
  $('etapa').value=stage
 }
 function renderReadings(){
@@ -359,6 +360,7 @@ function pendentesMesPassado(){
  return entries.filter(e=>!e.resolvido&&mesesDe(e).includes(ant)&&!mesesDe(e).includes(cur))
 }
 function renderRecords(){
+ renderStages();
  const pend=pendentesMesPassado();
  $('mesDot').classList.toggle('show',pend.length>0);
  let filtered;
