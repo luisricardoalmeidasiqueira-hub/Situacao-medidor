@@ -260,7 +260,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='4.4',APP_DATE='22/10/2026';
+const APP_VERSION='4.5',APP_DATE='22/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -769,17 +769,41 @@ const BAIRROS_FIXOS=[
 function normTxt(t){return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()}
 function getCorr(){try{return JSON.parse(localStorage.getItem(KEY_CORR)||'{}')||{}}catch(_){return{}}}
 function setCorr(c){try{localStorage.setItem(KEY_CORR,JSON.stringify(c))}catch(_){}}
-function corrigeParte(t){
+const PREF_BAIRRO=['jardim','jd','vila','vl','parque','pq','residencial','res','conjunto','cj','chacara','nucleo','loteamento'];
+const PREF_RUA=/^(rua|avenida|av|travessa|tv|alameda|estrada|rodovia|praca|largo|viela|rod|al|est)\b/;
+function dist(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let prev=Array.from({length:n+1},(_,i)=>i);for(let i=1;i<=m;i++){const cur=[i];for(let j=1;j<=n;j++)cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));prev=cur}return prev[n]}
+/* compara com bairros/ruas já salvos: se for quase igual, usa o que já existe */
+function parecidoConhecido(t,tipo){
+ const k=normTxt(t);if(k.length<5)return null;
+ const conta={};
+ (entries||[]).forEach(e=>{if(!e.endereco)return;const [r,...b]=String(e.endereco).split(' – ');const v=(tipo==='b'?b.join(' – '):r).trim();if(v)conta[v]=(conta[v]||0)+1});
+ const comp=x=>normTxt(x).replace(/ /g,''),kc=comp(t),kPref=normTxt(t).split(' ')[0];
+ let melhor=null,md=99;
+ for(const v of Object.keys(conta)){
+  if(normTxt(v)===k)continue;
+  const w=normTxt(v).split(' '),temPref=tipo==='b'?PREF_BAIRRO.includes(w[0]):PREF_RUA.test(normTxt(v));
+  const nucleo=temPref?w.slice(1).join(''):w.join('');
+  if(nucleo.length<5)continue;
+  const variantes=tipo==='b'?[nucleo,'jd'+nucleo,'j'+nucleo,'jardim'+nucleo,'vl'+nucleo,'vila'+nucleo,'pq'+nucleo,'parque'+nucleo,comp(v)]:[nucleo,'r'+nucleo,'rua'+nucleo,'av'+nucleo,comp(v)];
+  const d=Math.min(...variantes.map(x=>dist(kc,x))),lim=Math.max(1,Math.floor(nucleo.length*0.15));
+  const melhorQue=(temPref&&(tipo==='b'?!PREF_BAIRRO.includes(kPref):!PREF_RUA.test(k)))||conta[v]>((conta[t]||0));
+  if(d<=lim&&d<md&&melhorQue){md=d;melhor=v}
+ }
+ return melhor
+}
+function corrigeParte(t,tipo){
  if(!t)return t;
  const c=getCorr(),k=normTxt(t);
  if(c[k])return c[k];
  for(const f of BAIRROS_FIXOS)if(f.re.test(t))return f.certo;
+ const p=parecidoConhecido(t,tipo);if(p)return p;
+ if(tipo==='r'&&!PREF_RUA.test(k)&&/[a-z]{3,}/.test(k))return 'Rua '+t.trim();
  return t
 }
 function corrigeEndereco(end){
  if(!end)return end;
  const [rua,...resto]=String(end).split(' – '),bairro=resto.join(' – ');
- const r2=corrigeParte(rua),b2=bairro?corrigeParte(bairro):'';
+ const r2=corrigeParte(rua,'r'),b2=bairro?corrigeParte(bairro,'b'):'';
  return r2+(b2?' – '+b2:'')
 }
 /* guarda a correção quando a pessoa arruma na mão o endereço lido da foto */
