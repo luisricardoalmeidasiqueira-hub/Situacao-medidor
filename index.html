@@ -135,6 +135,11 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 .rec-compact .meta{margin-top:2px;font-size:12px;line-height:1.35}
 .addr-line{font-size:12.5px}
 .sem-end{color:#b45f06;cursor:pointer}
+.record.unsent{background:#fffaf3;border-top-color:#f5d9b8;border-right-color:#f5d9b8;border-bottom-color:#f5d9b8}
+.unsent-chip{display:inline-flex;align-items:center;gap:5px;background:#fff1e3;color:#b45f06;border:1px solid #f5c79a;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:900;margin-right:6px}
+.unsent-chip i{width:8px;height:8px;border-radius:50%;background:#f08a24;display:inline-block}
+.record.sent{background:#f1faf4;border-top-color:#bfe5cf;border-right-color:#bfe5cf;border-bottom-color:#bfe5cf}
+.sent-chip{display:inline-block;background:#e3f5ea;color:#1f8a4c;border:1px solid #bfe5cf;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:900;margin-right:6px;cursor:pointer}
 .meta.small{font-size:11px;color:#8597a6}
 .head-actions{display:flex;align-items:center;gap:7px}
 .share-list{border:1px solid var(--line);background:#fff;color:#1f8a4c;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:850}
@@ -255,7 +260,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='4.1',APP_DATE='21/10/2026';
+const APP_VERSION='4.3',APP_DATE='22/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -273,7 +278,8 @@ function fmtDateTime(ts){
 }
 function saveData(){try{localStorage.setItem(KEY,JSON.stringify(entries))}catch(e){}}
 function loadData(){
- try{const raw=localStorage.getItem(KEY);entries=raw?JSON.parse(raw):[];if(!Array.isArray(entries))entries=[];entries.forEach(e=>{if(e.situacao==='Medidor carbonizado')e.situacao='Carbonizado';if(e.endereco)e.endereco=corrigeEndereco(e.endereco)})}
+ try{const raw=localStorage.getItem(KEY);entries=raw?JSON.parse(raw):[];if(!Array.isArray(entries))entries=[];entries.forEach(e=>{if(e.situacao==='Medidor carbonizado')e.situacao='Carbonizado';if(e.endereco)e.endereco=corrigeEndereco(e.endereco)});
+  try{if(!localStorage.getItem('situacao-medidor-mig-enviados')){const corte=new Date(2026,9,22).getTime();entries.forEach(e=>{if(!e.enviadoEm&&(e.ultimoLanc||e.criadoEm||0)<corte){e.enviadoEm=corte-1;e.enviadoSemData=true}});localStorage.setItem('situacao-medidor-mig-enviados','1');localStorage.setItem(KEY,JSON.stringify(entries))}}catch(_){}}
  catch(e){entries=[]}
 }
 function renderStages(){
@@ -385,7 +391,8 @@ function renderRecords(){
  const leit=(e.leituras||[]).length?(e.leituras||[]).join(' / '):'',ms=mesesDe(e);
  const info=[leit?`Leitura <strong>${esc(leit)}</strong>`:'',e.apontadoPor?`por <strong>${esc(e.apontadoPor)}</strong>`:'',ms.length===1?`Lançado em ${fmtMes(ms[0])}`:''].filter(Boolean).join(' · ');
  const reg=`Registrado ${esc(fmtDateTime(e.criadoEm))}`+(e.editadoEm?` · editado ${esc(fmtDateTime(e.editadoEm))}${e.editadoPor?' por '+esc(e.editadoPor):''}`:'');
- return `<article class="record rec-compact ${e.resolvido?'resolved':''}">
+ const env=isEnviado(e);
+ return `<article class="record rec-compact ${e.resolvido?'resolved':''} ${env?'sent':(e.resolvido?'':'unsent')}">
  <div class="record-top"><div class="code">${esc(e.codigo)}</div><div class="top-right">${!e.resolvido&&ms.length>1?`<span class="mes-chip">${ms.length} meses</span>`:''}<div class="date">${esc(fmtDate(e.data))}</div></div></div>
  ${(e.endereco||e.numero)?`<div class="meta addr-line">📍 <strong>${esc(fmtEndereco(e))}</strong></div>`:`<div class="meta addr-line sem-end" onclick="editEntry('${esc(e.id)}',true)">📍 Sem endereço · <u>toque para adicionar</u></div>`}
  <div class="meta">Medidor <strong>${esc(e.medidor)}</strong> · <span class="${e.resolvido?'good':'bad'}">${esc(e.situacao)}</span> · Etapa ${esc(e.etapa)}</div>
@@ -393,7 +400,7 @@ function renderRecords(){
  ${info?`<div class="meta">${info}</div>`:''}
  ${e.obs?`<div class="meta">Obs.: ${esc(e.obs)}</div>`:''}
  ${e.fotos?.length?`<div class="previews">${e.fotos.map(x=>`<img src="${x}" alt="Foto do registro">`).join('')}</div>`:''}
- <div class="meta small">${reg}</div>
+ <div class="meta small">${env?`<span class="sent-chip" onclick="toggleEnviado('${esc(e.id)}')">📤 Enviado${e.enviadoSemData?'':' '+esc(fmtDateTime(e.enviadoEm).slice(0,5))}</span>`:(e.resolvido?'':`<span class="unsent-chip"><i></i>Não enviado</span>`)}${reg}</div>
  <div class="record-actions"><button class="edit" type="button" onclick="editEntry('${esc(e.id)}')"><b>✏️</b>Editar</button>
  ${e.resolvido||viewMode==='esteMes'?'':`<button class="again" type="button" onclick="relaunch('${esc(e.id)}')"><b>${viewMode==='mes'?'➡️':'🔁'}</b>${viewMode==='mes'?'Passar':'Lançar'}</button>`}
  <button class="resolve" type="button" onclick="toggleResolved('${esc(e.id)}')"><b>${e.resolvido?'↩️':'✅'}</b>${e.resolvido?'Reabrir':'Resolver'}</button>
@@ -441,22 +448,29 @@ async function shareText(title,text,files){
   if(navigator.share){
    const data={title,text};
    if(files&&files.length&&navigator.canShare&&navigator.canShare({files}))data.files=files;
-   await navigator.share(data);return
+   await navigator.share(data);return true
   }
- }catch(e){if(e&&e.name==='AbortError')return}
- try{await navigator.clipboard.writeText(text);$('status').textContent='Texto copiado. É só colar no WhatsApp.';$('status').style.color='var(--blue)'}
- catch(_){prompt('Copie o texto:',text)}
+ }catch(e){if(e&&e.name==='AbortError')return false}
+ try{await navigator.clipboard.writeText(text);$('status').textContent='Texto copiado. É só colar no WhatsApp.';$('status').style.color='var(--blue)';return true}
+ catch(_){prompt('Copie o texto:',text);return true}
 }
 function dataUrlToFile(u,name){const [h,b64]=u.split(','),bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new File([arr],name,{type:(h.match(/data:(.*?);/)||[])[1]||'image/jpeg'})}
 window.shareEntry=id=>{
  const e=entries.find(x=>x.id===id);if(!e)return;
  const files=(e.fotos||[]).map((u,i)=>{try{return dataUrlToFile(u,`medidor-${e.medidor}-${i+1}.jpg`)}catch(_){return null}}).filter(Boolean);
- shareText('Situação do medidor','📋 Situação do medidor\n'+textoRegistro(e),files)
+ shareText('Situação do medidor','📋 Situação do medidor\n'+textoRegistro(e),files).then(ok=>{if(ok)marcarEnviados([e])})
 };
 function shareList(){
  if(!visibleList.length){alert('Não há registros nesta lista.');return}
+ let lista=visibleList.slice();
+ const novos=lista.filter(e=>!isEnviado(e));
+ if(!novos.length){if(!confirm('Todos desta lista já foram enviados. Enviar de novo?'))return}
+ else if(novos.length<lista.length){
+  if(confirm(`Enviar só os que ainda não foram enviados (${novos.length})?`))lista=novos;
+  else if(!confirm('Enviar a lista inteira, incluindo os já enviados?'))return;
+ }
  const titulo=viewMode==='mes'?`📋 Pendentes de ${fmtMes(mesPassado())}`:viewMode==='esteMes'?`📋 Lançados em ${fmtMes(mesAtual())}`:`📋 Registros da Etapa ${stage}`;
- shareText('Situação do medidor',titulo+'\n\n'+visibleList.map(textoRegistro).join('\n\n— — —\n\n'))
+ shareText('Situação do medidor',titulo+'\n\n'+lista.map(textoRegistro).join('\n\n— — —\n\n')).then(ok=>{if(ok)marcarEnviados(lista)})
 }
 window.deleteEntry=id=>{
  if(!confirm('Excluir este registro?'))return;
@@ -478,6 +492,24 @@ function linhaMeses(e){
  if(ms.length>1)return `<div class="meta repeat"><span class="dot"></span>Lançado em ${ms.length} meses sem resolver: ${lista}</div>`;
  return `<div class="meta">Lançado em ${lista}</div>`
 }
+function proxMes(ym){let [y,m]=ym.split('-').map(Number);m++;if(m>12){m=1;y++}return y+'-'+String(m).padStart(2,'0')}
+function passarAutomatico(){
+ const cur=mesAtual(),hoje=todayStr();let n=0;
+ entries.forEach(e=>{
+  if(e.resolvido)return;
+  const ms=mesesDe(e);if(!ms.length)return;
+  let ult=ms[ms.length-1];if(ult>=cur)return;
+  while(ult<cur){ult=proxMes(ult);addLancamento(e,ult===cur?hoje:ult+'-01')}
+  e.passadoAuto=true;n++
+ });
+ if(n){saveData();renderRecords();setTimeout(()=>toast(`Pendentes passados sozinhos para ${fmtMes(cur)}.`,false,5000),400)}
+}
+function isEnviado(e){return !!e.enviadoEm&&e.enviadoEm>=(e.ultimoLanc||e.criadoEm||0)}
+function marcarEnviados(lista){const t=Date.now();lista.forEach(e=>{e.enviadoEm=t;delete e.enviadoSemData});saveData();renderRecords()}
+window.toggleEnviado=id=>{
+ const e=entries.find(x=>x.id===id);if(!e)return;
+ if(isEnviado(e)){if(!confirm('Desmarcar como enviado?'))return;delete e.enviadoEm;delete e.enviadoSemData;saveData();renderRecords()}
+};
 function addLancamento(e,data){
  e.lancamentos=lancs(e);
  const mes=data.slice(0,7);
@@ -488,15 +520,17 @@ function fmtEndereco(e){return [e.endereco||'',e.numero?('nº '+e.numero):''].fi
 function csvCell(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
 function exportCSV(){
  if(!entries.length){alert('Não há registros para exportar.');return}
- const rows=[['Código do cliente','Endereço','Número','Número do medidor','Leituras','Situação','Etapa','Data','Lançado em','Observações','Qtd. fotos','Status','Resolvido em','Apontado por','Editado em','Editado por','Meses lançado','Meses'],
+ const rows=[['Código do cliente','Endereço','Número','Número do medidor','Leituras','Situação','Etapa','Data','Lançado em','Observações','Qtd. fotos','Status','Resolvido em','Apontado por','Editado em','Editado por','Meses lançado','Meses','Enviado'],
  ...entries.slice().sort((a,b)=>(Number(a.etapa)-Number(b.etapa))||(b.criadoEm-a.criadoEm))
  .map(e=>[e.codigo,e.endereco||'',e.numero||'',e.medidor,(e.leituras||[]).join(' / '),e.situacao,e.etapa,fmtDate(e.data),fmtDateTime(e.criadoEm),
- e.obs||'',(e.fotos||[]).length,e.resolvido?'Resolvido':'Pendente',e.resolvidoEm?fmtDateTime(e.resolvidoEm):'',e.apontadoPor||'',e.editadoEm?fmtDateTime(e.editadoEm):'',e.editadoPor||'',mesesDe(e).length,mesesDe(e).map(fmtMes).join(', ')])];
+ e.obs||'',(e.fotos||[]).length,e.resolvido?'Resolvido':'Pendente',e.resolvidoEm?fmtDateTime(e.resolvidoEm):'',e.apontadoPor||'',e.editadoEm?fmtDateTime(e.editadoEm):'',e.editadoPor||'',mesesDe(e).length,mesesDe(e).map(fmtMes).join(', '),isEnviado(e)?(e.enviadoSemData?'Sim':fmtDateTime(e.enviadoEm)):'Não'])];
  const csv='\uFEFF'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),a=document.createElement('a');
  a.href=URL.createObjectURL(blob);a.download=`registros-todas-etapas-${todayStr()}.csv`;
  a.click();URL.revokeObjectURL(a.href);
- $('status').textContent='CSV exportado.';$('status').style.color='var(--blue)'
+ $('status').textContent='CSV exportado.';$('status').style.color='var(--blue)';
+ const falt=entries.filter(e=>!isEnviado(e));
+ if(falt.length&&confirm('Marcar todos como enviados?'))marcarEnviados(falt)
 }
 function shareApp(){
  const shareData={title:'Situação Medidor',text:'Acesse o aplicativo Situação Medidor.',url:window.location.href};
@@ -840,6 +874,8 @@ try{$('apontador').value=localStorage.getItem(KEY_APONTADOR)||''}catch(e){}
 $('apontador').addEventListener('input',e=>{try{localStorage.setItem(KEY_APONTADOR,e.target.value.trim())}catch(_){}});
 loadData();renderStages();renderReadings();$('data').value=todayStr();aplicarCalendario();renderRecords();
 $('data').addEventListener('change',aplicarCalendario);
+passarAutomatico();
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')passarAutomatico()});
 </script>
 </body>
 </html>
