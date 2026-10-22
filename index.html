@@ -260,7 +260,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='4.3',APP_DATE='22/10/2026';
+const APP_VERSION='4.4',APP_DATE='22/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -283,8 +283,8 @@ function loadData(){
  catch(e){entries=[]}
 }
 function renderStages(){
- const pend=new Set(entries.filter(e=>!e.resolvido).map(e=>Number(e.etapa)));
- $('etapa').innerHTML=stages.map(n=>`<option value="${n}">Etapa ${n}${pend.has(n)?' 🟠':''}</option>`).join('');
+ const st={};entries.filter(e=>!e.resolvido).forEach(e=>{const n=Number(e.etapa);st[n]=st[n]==='o'||!isEnviado(e)?'o':'g'});
+ $('etapa').innerHTML=stages.map(n=>`<option value="${n}">Etapa ${n}${st[n]==='o'?' 🟠':st[n]==='g'?' 🟢':''}</option>`).join('');
  $('etapa').value=stage
 }
 function renderReadings(){
@@ -493,13 +493,20 @@ function linhaMeses(e){
  return `<div class="meta">Lançado em ${lista}</div>`
 }
 function proxMes(ym){let [y,m]=ym.split('-').map(Number);m++;if(m>12){m=1;y++}return y+'-'+String(m).padStart(2,'0')}
+function consertoEnviados43(){
+ try{if(localStorage.getItem('situacao-medidor-fix-43'))return;
+  let n=0;entries.forEach(e=>{if(e.enviadoSemData&&e.passadoAuto&&!isEnviado(e)&&mesesDe(e).includes('2026-10')){e.enviadoEm=e.ultimoLanc;n++}});
+  localStorage.setItem('situacao-medidor-fix-43','1');if(n)saveData()}catch(_){}
+}
 function passarAutomatico(){
  const cur=mesAtual(),hoje=todayStr();let n=0;
  entries.forEach(e=>{
   if(e.resolvido)return;
   const ms=mesesDe(e);if(!ms.length)return;
   let ult=ms[ms.length-1];if(ult>=cur)return;
+  const jaEnviadoAntes=e.enviadoSemData&&isEnviado(e);
   while(ult<cur){ult=proxMes(ult);addLancamento(e,ult===cur?hoje:ult+'-01')}
+  if(jaEnviadoAntes&&cur==='2026-10')e.enviadoEm=e.ultimoLanc;
   e.passadoAuto=true;n++
  });
  if(n){saveData();renderRecords();setTimeout(()=>toast(`Pendentes passados sozinhos para ${fmtMes(cur)}.`,false,5000),400)}
@@ -874,7 +881,7 @@ try{$('apontador').value=localStorage.getItem(KEY_APONTADOR)||''}catch(e){}
 $('apontador').addEventListener('input',e=>{try{localStorage.setItem(KEY_APONTADOR,e.target.value.trim())}catch(_){}});
 loadData();renderStages();renderReadings();$('data').value=todayStr();aplicarCalendario();renderRecords();
 $('data').addEventListener('change',aplicarCalendario);
-passarAutomatico();
+consertoEnviados43();passarAutomatico();renderRecords();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')passarAutomatico()});
 </script>
 </body>
