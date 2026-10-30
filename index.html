@@ -184,7 +184,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 
 <div class="label-row"><label for="codigo">Código do cliente <span class="req">*</span></label>
 <div class="pda-btns"><button class="pda-btn paste-btn" id="pasteBtn" type="button" title="Colar dados copiados" aria-label="Colar dados copiados">📋</button><button class="pda-btn" id="pdaBtn" type="button" title="Ler a tela do PDA" aria-label="Ler a tela do PDA">📟</button></div></div>
-<input id="pdaInput" type="file" accept="image/*">
+<input id="pdaInput" type="file" accept="image/*" multiple>
 <input id="codigo" inputmode="numeric" autocomplete="off" placeholder="Digite o código">
 <div class="pda-bar" id="pdaBar"><div id="pdaBarFill"></div></div>
 <details class="pda-raw" id="pdaRaw" style="display:none"><summary>Ver texto lido da foto</summary><pre id="pdaText"></pre></details>
@@ -262,7 +262,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='4.7',APP_DATE='30/10/2026';
+const APP_VERSION='4.9',APP_DATE='30/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -628,14 +628,14 @@ async function updateApp(silent){
 $('updateBtn').onclick=()=>updateApp(false);
 
 /* ===== Leitura da tela do PDA (OCR) ===== */
-let ocrWorker=null,ocrPass=0;
+let ocrWorker=null,ocrPass=0,ocrTotal=2;
 function loadScript(src){return new Promise((ok,err)=>{const sc=document.createElement('script');sc.src=src;sc.onload=ok;sc.onerror=err;document.head.appendChild(sc)})}
 function setPdaProgress(p){$('pdaBar').classList.add('show');$('pdaBarFill').style.width=Math.round(p*100)+'%'}
 async function getWorker(){
  if(ocrWorker)return ocrWorker;
  if(!window.Tesseract)await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
  ocrWorker=await Tesseract.createWorker('por',1,{logger:m=>{
-  if(m.status==='recognizing text')setPdaProgress(.2+(ocrPass+m.progress)*.4);
+  if(m.status==='recognizing text')setPdaProgress(.2+(ocrPass+m.progress)*(.8/ocrTotal));
   else if(m.progress!=null)setPdaProgress(m.progress*.2)
  }});
  try{await ocrWorker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'})}catch(_){}
@@ -689,7 +689,7 @@ function parsePDA(text){
  let med=after(/\b(m[dD0O]|n[º°o.]?\s*(do\s*)?medidor|medidor|med\.?)\s*[:;.]/i,/[0-9A-Z][0-9A-Z.\-]{4,}/i)
   ||after(/\b(medidor|med)\b/i,/[0-9A-Z][0-9A-Z.\-]{4,}/i);
  const medOk=v=>v&&/^[A-Z0-9]{7,11}$/i.test(v.replace(/[.\-]/g,''))&&(v.match(/\d/g)||[]).length>=6;
- if(!medOk(med)){const m=text.match(/\b[A-Z][0-9]{7,9}\b/);med=m?m[0]:(medOk(med)?med:null)}
+ if(!medOk(med)){const h=text.match(/\b([A-Z][0-9]{6,8})\s?-\s?([0-9])(?![0-9])/),m=text.match(/\b[A-Z][0-9]{7,9}\b/);med=h?h[1]+h[2]:m?m[0]:(medOk(med)?med:null)}
  if(med){med=med.toUpperCase();out.medidor=med.charAt(0)+cleanNum(med.slice(1)).replace(/[A-Z]/gi,c=>({O:'0',I:'1',L:'1',S:'5',B:'8',Z:'2'}[c.toUpperCase()]||c))}
  // Código do cliente: "UC: 8791309"
  const cod=after(/\b(u\.?\s?[cCgG]\.?|c[oó0]d(igo|\.)?\s*(do\s*)?(cliente|cli\.?)?|cliente|instala[cç][aã]o|inst\.?|conta\s*contrato)\s*[:;]/i,NUMV)
@@ -834,15 +834,20 @@ function aprendeCorrecao(lido,salvo){
 function markAuto(id){$(id).classList.add('auto-filled')}
 function clearAutoFill(){document.querySelectorAll('.auto-filled').forEach(el=>el.classList.remove('auto-filled'))}
 document.addEventListener('input',e=>{if(e.target.classList&&e.target.classList.contains('auto-filled'))e.target.classList.remove('auto-filled')});
-async function readPDA(file){
+async function readPDA(files){
+ files=Array.isArray(files)?files:[files];
  const btn=$('pdaBtn'),say=(t,err)=>{$('status').textContent=t;$('status').style.color=err?'var(--red)':'var(--blue)';toast(t,err,err?6000:5000)};
  btn.disabled=true;btn.textContent='⏳';
  say('Lendo a tela do PDA. Na primeira vez demora um pouco mais.');setPdaProgress(.02);
  try{
   const w=await getWorker(),texts=[];
-  ocrPass=0;texts.push((await w.recognize(await prepImage(file,2600,10))).data.text||'');
-  ocrPass=1;texts.push((await w.recognize(await prepImage(file,2000,18))).data.text||'');
-  $('pdaText').textContent=texts.map(t=>t.trim()).join('\n\n— 2ª leitura —\n\n')||'(nenhum texto encontrado)';$('pdaRaw').style.display='block';
+  ocrTotal=files.length*2;ocrPass=0;
+  for(let i=0;i<files.length;i++){
+   if(files.length>1)say(`Lendo a foto ${i+1} de ${files.length}...`);
+   texts.push((await w.recognize(await prepImage(files[i],2600,10))).data.text||'');ocrPass++;
+   texts.push((await w.recognize(await prepImage(files[i],2000,18))).data.text||'');ocrPass++;
+  }
+  $('pdaText').textContent=texts.map((t,i)=>(files.length>1&&i%2===0?`— Foto ${i/2+1} —\n`:'')+t.trim()).join('\n\n')||'(nenhum texto encontrado)';$('pdaRaw').style.display='block';
   const r=mergePDA(texts.map(parsePDA)),got=[];
   clearAutoFill();
   if(r.codigo){$('codigo').value=r.codigo;markAuto('codigo');got.push('código')}
@@ -878,6 +883,11 @@ function preencherDeTexto(txt){
   if(/^etapa$/.test(k))return 'etapa';
   if(/^(obs|observacao|observacoes|obs\.)$/.test(k))return 'obs';
   return null};
+ /* acha cada informação pelo nome, mesmo que o iPhone cole tudo numa linha só */
+ const plano=String(txt||'').replace(/[\u2028\u2029\r\n\t]+/g,'\n').replace(/[\u00a0]/g,' ');
+ const RE_ROT=/(^|[\s\n·•|;])(c[óo]digo(?: do cliente)?|uc|endere[çc]o|n[º°o]\.?|n[úu]mero(?! do medidor)|medidor|n[úu]mero do medidor|md|leituras?|situa[çc][ãa]o|etapa|obs\.?|observa[çc](?:[ãa]o|[õo]es)|apontado por|lan[çc]ado em|data)\s*:\s*/gi;
+ const ach=[];let mm;while((mm=RE_ROT.exec(plano))){ach.push({k:mm[2],ini:mm.index+mm[0].length,pos:mm.index+mm[1].length})}
+ ach.forEach((a,i)=>{const fim=i+1<ach.length?ach[i+1].pos:plano.length;const v=plano.slice(a.ini,fim).replace(/\s+/g,' ').trim();const c=chave(a.k.replace(/[º°]/g,'o'));if(c&&v&&!d[c])d[c]=v});
  for(const l of lin){const m=l.match(/^([^:]{1,25}):\s*(.*)$/);if(!m)continue;const c=chave(m[1].replace(/[º°]/g,'o'));if(c&&m[2]&&!d[c])d[c]=m[2].trim()}
  let r={};
  if(Object.keys(d).length>=2){
@@ -907,7 +917,7 @@ $('pasteBtn').onclick=async()=>{
  if(!t)t=prompt('Cole aqui o texto copiado:')||'';
  if(t.trim())preencherDeTexto(t)
 };
-$('pdaInput').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)readPDA(f)};
+$('pdaInput').onchange=e=>{const fs=Array.from(e.target.files||[]).slice(0,4);e.target.value='';if(fs.length)readPDA(fs)};
 $('cancelEdit').onclick=()=>{resetForm();$('status').textContent='Edição cancelada.';$('status').style.color='var(--muted)'};
 $('previews').addEventListener('click',ev=>{
  const img=ev.target.closest('img[data-i]');if(!img)return;
