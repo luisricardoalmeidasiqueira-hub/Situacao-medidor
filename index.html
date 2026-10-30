@@ -262,7 +262,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='4.9',APP_DATE='30/10/2026';
+const APP_VERSION='5.0',APP_DATE='30/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -674,7 +674,8 @@ function expandAbrev(t){
   .replace(/\b(Dr|Prof|Cel|Cap|Eng|Pe)\.\./g,'$1.')
 }
 function parsePDA(text){
- const lines=text.split(/\r?\n/).map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean),out={};
+ /* a tela do PDA é toda em maiúsculas: palavra quase toda maiúscula com letra minúscula no meio é corrigida (VALDiRA → VALDIRA, FElTAS → FEITAS) */
+ const lines=text.split(/\r?\n/).map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean).map(l=>l.split(' ').map(w=>{const up=(w.match(/[A-ZÀ-Ú]/g)||[]).length,lo=(w.match(/[a-zà-ú]/g)||[]).length;return up>=3&&lo&&lo*2<=up?w.replace(/l/g,'I').toUpperCase():w}).join(' ')),out={};
  const after=(re,valRe)=>{
   for(let i=0;i<lines.length;i++){
    const m=lines[i].match(re);if(!m)continue;
@@ -718,6 +719,17 @@ function parsePDA(text){
    }
   }
  }
+ let nxLinha=idx>=0?lines[idx+1]:'';
+ if(!addr){
+  const iU=lines.findIndex(l=>/(^|[^a-z])u?\s?c\s*[:;,.]\s*[0-9oO]{5,}/i.test(l)||/\b000\d{8,}/.test(l));
+  const iM=lines.findIndex((l,i)=>i>iU&&/con\s?-?\s?\d|(^|\W)m\s?[dD0O]\s*[:;.]|capac/i.test(l));
+  if(iU>=0){
+   const fim=iM>iU?iM:Math.min(lines.length,iU+5);
+   const cand=lines.slice(iU+1,fim).filter(l=>!/xa\s*:|seq|orig|lg\s*,|cxa/i.test(l)&&/[a-zà-ú]{3,}/i.test(l))
+    .map(l=>l.toUpperCase().replace(/^[^A-ZÀ-Ú0-9]*(?:[A-ZÀ-Ú0-9]{1,2}[^A-ZÀ-Ú0-9\s]+\s*)*/,'').replace(/[|\[\]{}"“”'´`~^*_=+<>]/g,' ').replace(/\s+/g,' ').trim()).filter(l=>/[A-ZÀ-Ú]{3,}/.test(l));
+   if(cand.length){addr=cand[0];nxLinha=cand[1]||'';idx=-1}
+  }
+ }
  if(addr){
   const capsRun=(t,skipLead)=>{
    const tk=t.split(' '),out=[];let started=false;
@@ -730,7 +742,7 @@ function parsePDA(text){
    return out.join(' ').replace(/[,.\s]+$/,'')
   };
   addr=capsRun(addr,false);
-  let nx=lines[idx+1]?capsRun(lines[idx+1],true):'';
+  let nx=nxLinha?capsRun(nxLinha,true):'';
   if(!(nx&&/^[A-ZÀ-Ú .']{3,}$/.test(nx)&&!/^(MD|UC|CON)\b/.test(nx)))nx='';
   let parts=addr.split(/\s*,\s*/).map(x=>x.trim()).filter(Boolean),rua=parts[0],num=null,bairro='';
   const ni=parts.findIndex((x,i)=>i>0&&/^(\d{1,5}[A-Z]?|S\/?N)\.?$/i.test(cleanNum(x)||x));
@@ -744,7 +756,7 @@ function parsePDA(text){
   const limpa=t=>{const keep=[];for(const w of String(t||'').split(' ')){const u=w.replace(/[.,]/g,'');if(!u)continue;if(/^\d+$/.test(u)||(u.length<=3&&!CURTAS.includes(u)&&!CURTAS.includes(w)))break;keep.push(w)}return keep.join(' ').replace(/[,.\s]+$/,'')};
   const semBairro=t=>String(t||'').replace(/^\W*B?AIRRO\s+/i,'');
   bairro=limpa(semBairro(bairro));nx=limpa(semBairro(nx));
-  rua=rua.replace(/\s+-\s+.*$/,'').trim();
+  rua=rua.replace(/\s+-\s+.*$/,'').replace(/[.,;:]+$/,'').trim();
   if(nx)bairro=(bairro?bairro+' ':'')+nx;
   if(rua.length>2)out.endereco=expandAbrev(rua)+(bairro?' – '+expandAbrev(bairro):'');
   if(num)out.numero=num
@@ -849,6 +861,13 @@ async function readPDA(files){
   }
   $('pdaText').textContent=texts.map((t,i)=>(files.length>1&&i%2===0?`— Foto ${i/2+1} —\n`:'')+t.trim()).join('\n\n')||'(nenhum texto encontrado)';$('pdaRaw').style.display='block';
   const r=mergePDA(texts.map(parsePDA)),got=[];
+  /* se o medidor já está salvo no app, completa o que a foto não leu direito */
+  const conhecido=r.medidor&&entries.find(e=>String(e.medidor||'').toUpperCase()===r.medidor);
+  if(conhecido){
+   if(conhecido.codigo&&(!r.codigo||r.codigo.length!==String(conhecido.codigo).length))r.codigo=conhecido.codigo;
+   if(conhecido.endereco&&!r.endereco)r.endereco=conhecido.endereco;
+   if(conhecido.numero&&!r.numero)r.numero=conhecido.numero;
+  }
   clearAutoFill();
   if(r.codigo){$('codigo').value=r.codigo;markAuto('codigo');got.push('código')}
   if(r.endereco){pdaEndereco=corrigeEndereco(r.endereco);$('endereco').value=pdaEndereco;markAuto('endereco');got.push('endereço')}
