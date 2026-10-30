@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- publicado 22/10/2026 16h -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -79,6 +78,8 @@ background:var(--panel2);color:var(--blue);font-weight:900
 background:var(--blue);color:#fff;font-weight:900;font-size:19px;
 display:flex;align-items:center;gap:5px;flex:0 0 auto}
 .pda-btn:disabled{opacity:.7}
+.pda-btns{display:flex;gap:6px}
+.paste-btn{background:#eef5fb;border:1px solid var(--line)}
 .pda-bar{height:5px;border-radius:3px;background:var(--panel2);margin-top:7px;overflow:hidden;display:none}
 .pda-bar.show{display:block}
 .pda-bar div{height:100%;width:0;background:var(--blue);transition:width .2s}
@@ -86,7 +87,7 @@ display:flex;align-items:center;gap:5px;flex:0 0 auto}
 .pda-raw summary{cursor:pointer;font-weight:800}
 .pda-raw pre{white-space:pre-wrap;word-break:break-word;background:var(--panel2);border:1px solid var(--line);
 border-radius:10px;padding:8px;margin:6px 0 0;font-size:11.5px;color:var(--text);max-height:220px;overflow:auto}
-input.auto-filled{background:#fff8e1;border-color:#f0c96a}
+input.auto-filled,select.auto-filled{background:#fff8e1;border-color:#f0c96a}
 .action-grid{
 display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:11px
 }
@@ -182,8 +183,8 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 <div class="hint">Fica salvo no aparelho, não precisa digitar toda vez.</div>
 
 <div class="label-row"><label for="codigo">Código do cliente <span class="req">*</span></label>
-<button class="pda-btn" id="pdaBtn" type="button" title="Ler a tela do PDA" aria-label="Ler a tela do PDA">📟</button></div>
-<input id="pdaInput" type="file" accept="image/*" capture="environment">
+<div class="pda-btns"><button class="pda-btn paste-btn" id="pasteBtn" type="button" title="Colar dados copiados" aria-label="Colar dados copiados">📋</button><button class="pda-btn" id="pdaBtn" type="button" title="Ler a tela do PDA" aria-label="Ler a tela do PDA">📟</button></div></div>
+<input id="pdaInput" type="file" accept="image/*">
 <input id="codigo" inputmode="numeric" autocomplete="off" placeholder="Digite o código">
 <div class="pda-bar" id="pdaBar"><div id="pdaBarFill"></div></div>
 <details class="pda-raw" id="pdaRaw" style="display:none"><summary>Ver texto lido da foto</summary><pre id="pdaText"></pre></details>
@@ -261,7 +262,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='4.5',APP_DATE='22/10/2026';
+const APP_VERSION='4.7',APP_DATE='30/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -687,12 +688,18 @@ function parsePDA(text){
  // Medidor: "MD: B22678461" (também aceita "Medidor")
  let med=after(/\b(m[dD0O]|n[º°o.]?\s*(do\s*)?medidor|medidor|med\.?)\s*[:;.]/i,/[0-9A-Z][0-9A-Z.\-]{4,}/i)
   ||after(/\b(medidor|med)\b/i,/[0-9A-Z][0-9A-Z.\-]{4,}/i);
- if(!med){const m=text.match(/\b[A-Z][0-9]{7,9}\b/);if(m)med=m[0]}
+ const medOk=v=>v&&/^[A-Z0-9]{7,11}$/i.test(v.replace(/[.\-]/g,''))&&(v.match(/\d/g)||[]).length>=6;
+ if(!medOk(med)){const m=text.match(/\b[A-Z][0-9]{7,9}\b/);med=m?m[0]:(medOk(med)?med:null)}
  if(med){med=med.toUpperCase();out.medidor=med.charAt(0)+cleanNum(med.slice(1)).replace(/[A-Z]/gi,c=>({O:'0',I:'1',L:'1',S:'5',B:'8',Z:'2'}[c.toUpperCase()]||c))}
  // Código do cliente: "UC: 8791309"
  const cod=after(/\b(u\.?\s?[cCgG]\.?|c[oó0]d(igo|\.)?\s*(do\s*)?(cliente|cli\.?)?|cliente|instala[cç][aã]o|inst\.?|conta\s*contrato)\s*[:;]/i,NUMV)
   ||after(/\b(u\.?\s?c|c[oó]d(igo)?\s*(do\s*)?cliente|instala[cç][aã]o)\b/i,NUMV);
- if(cod)out.codigo=cleanNum(cod).replace(/[^0-9]/g,'');
+ let codF=cod?cleanNum(cod).replace(/[^0-9]/g,''):'';
+ if(!codF||codF.length<6){
+  const c2=after(/(^|[^A-Za-z])[cC]\s*[:;]/,NUMV);if(c2)codF=cleanNum(c2).replace(/[^0-9]/g,'');
+ }
+ if(!codF||codF.length<6){const m=text.replace(/[Oo]/g,'0').match(/\b000\d{9,13}\b/);if(m)codF=m[0]}
+ if(codF){out.codigo=codF;if(/^000/.test(codF)&&codF.length!==15)out.codigoDuvida=true}
  // Endereço: "R JUVENAL DE MEDEIROS, 157, JD" + linha seguinte (bairro)
  let idx=lines.findIndex(l=>/\b(endere[cç]o|logradouro)\b\s*[:;]?/i.test(l)),addr=null;
  if(idx>=0){addr=lines[idx].replace(/^.*?\b(endere[cç]o|logradouro)\b\s*[:;.\-]?\s*/i,'');if(!addr&&lines[idx+1]){idx++;addr=lines[idx]}}
@@ -704,6 +711,11 @@ function parsePDA(text){
    idx=lines.findIndex(l=>/[A-ZÀ-Ú]{3,}( [A-ZÀ-Ú]{2,})+,\s*\d{1,5}\b/.test(l)&&!/\b(UC|MD)\s*[:;]/.test(l));
    if(idx>=0){const m=lines[idx].match(/[A-ZÀ-Ú]{3,}( [A-ZÀ-Ú]{2,})+,\s*\d{1,5}\b.*/);addr=m[0].replace(/^R(?=[^AEIOUÁÉÍÓÚÂÊÔÃÕH\s][A-ZÀ-Ú]{3,})/,'R ');
     if(!/^R\s/.test(addr)&&/(^|\s)\S{0,2}R\.?\s*$/.test(lines[idx].slice(0,m.index)))addr='R '+addr}
+   else{
+    const RE3=/([A-ZÀ-Ú]{3,}(?: [A-ZÀ-Ú]{2,})+)[^,\s]*(?:\s+\S+)?\s*,\s*(\d{1,5})\b(.*)/;
+    idx=lines.findIndex(l=>RE3.test(l)&&!/\b(UC|MD|LG|MO)\b/.test(l));
+    if(idx>=0){const m=lines[idx].match(RE3);addr=m[1]+', '+m[2]+(m[3]||'')}
+   }
   }
  }
  if(addr){
@@ -730,7 +742,8 @@ function parsePDA(text){
   }
   const CURTAS=['JD','VL','PQ','DE','DA','DO','DOS','DAS','E','STA','STO','SAO','SÃO','RES','CJ','NS','N','SR','SRA','BOA','SOL','LUZ','REI','PAZ','DR','JD.','VL.','PQ.'];
   const limpa=t=>{const keep=[];for(const w of String(t||'').split(' ')){const u=w.replace(/[.,]/g,'');if(!u)continue;if(/^\d+$/.test(u)||(u.length<=3&&!CURTAS.includes(u)&&!CURTAS.includes(w)))break;keep.push(w)}return keep.join(' ').replace(/[,.\s]+$/,'')};
-  bairro=limpa(bairro);nx=limpa(nx);
+  const semBairro=t=>String(t||'').replace(/^\W*B?AIRRO\s+/i,'');
+  bairro=limpa(semBairro(bairro));nx=limpa(semBairro(nx));
   rua=rua.replace(/\s+-\s+.*$/,'').trim();
   if(nx)bairro=(bairro?bairro+' ':'')+nx;
   if(rua.length>2)out.endereco=expandAbrev(rua)+(bairro?' – '+expandAbrev(bairro):'');
@@ -746,6 +759,7 @@ function parsePDA(text){
   const m=l.match(/\bleitura\b\s*(atual)?\s*[:\-=]?\s*(\d{1,7})\b/i);
   if(m){out.leitura=m[2];break}
  }
+ if(!out.leitura){for(const l of lines){const m=l.match(/^\W{0,3}(\d{1,7})\s*\S{0,2}\s+MSG/i);if(m&&!/leitura/i.test(l)){out.leitura=m[1];break}}}
  return out
 }
 function mergePDA(rs){
@@ -755,7 +769,7 @@ function mergePDA(rs){
   return Object.keys(cnt).sort((a,b)=>(cnt[b]-cnt[a])||(score(b)-score(a)))[0]
  };
  return{
-  codigo:pick('codigo',v=>v.length),
+  codigo:pick('codigo',v=>(/^000/.test(v)&&v.length===15?100:0)+v.length),
   medidor:pick('medidor',v=>(/^[A-Z]/.test(v)?100:0)+v.length),
   endereco:(rs.find(r=>r.endereco&&/–/.test(r.endereco))||rs.find(r=>r.endereco)||{}).endereco,
   numero:pick('numero',v=>v.length),
@@ -836,7 +850,8 @@ async function readPDA(file){
   if(r.numero){$('numero').value=r.numero;markAuto('numero');got.push('nº')}
   if(r.medidor){$('medidor').value=r.medidor;markAuto('medidor');got.push('medidor')}
   if(r.leitura){readings=[r.leitura];renderReadings();document.querySelector('.reading').classList.add('auto-filled');got.push('leitura')}
-  if(got.length)say(`Preenchido: ${got.join(', ')}. Confira os campos em amarelo e escolha a situação.`)
+  const duv=r.codigo&&/^000/.test(r.codigo)&&r.codigo.length!==15;
+  if(got.length)say(duv?`Preenchido: ${got.join(', ')}. O código saiu com ${r.codigo.length} números (o normal são 15): confira o código!`:`Preenchido: ${got.join(', ')}. Confira os campos em amarelo e escolha a situação.`,duv)
   else say('Não consegui identificar os campos. Abra "Ver texto lido da foto" e tente outra foto mais de perto.',true)
  }catch(e){
   const why=String((e&&(e.message||e.type))||e||'');
@@ -849,6 +864,49 @@ async function readPDA(file){
  }
 }
 $('pdaBtn').onclick=()=>$('pdaInput').click();
+/* ===== Colar dados copiados (bloco do Claude ou texto do 📤 Enviar) ===== */
+function normSit(t){return normTxt(t).replace(/^medidor carbonizado$/,'carbonizado')}
+function preencherDeTexto(txt){
+ const lin=String(txt||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean),d={};
+ const chave=k=>{k=normTxt(k);
+  if(/^(codigo|cod|uc|codigo do cliente|cliente)$/.test(k))return 'codigo';
+  if(/^(endereco|end|rua)$/.test(k))return 'endereco';
+  if(/^(n|no|nº|numero|num)$/.test(k)||k==='n o')return 'numero';
+  if(/^(medidor|md|numero do medidor)$/.test(k))return 'medidor';
+  if(/^(leitura|leituras)$/.test(k))return 'leitura';
+  if(/^(situacao|situação)$/.test(k))return 'situacao';
+  if(/^etapa$/.test(k))return 'etapa';
+  if(/^(obs|observacao|observacoes|obs\.)$/.test(k))return 'obs';
+  return null};
+ for(const l of lin){const m=l.match(/^([^:]{1,25}):\s*(.*)$/);if(!m)continue;const c=chave(m[1].replace(/[º°]/g,'o'));if(c&&m[2]&&!d[c])d[c]=m[2].trim()}
+ let r={};
+ if(Object.keys(d).length>=2){
+  r.codigo=(d.codigo||'').replace(/\D/g,'')||undefined;
+  if(d.endereco){let e=d.endereco;const mn=e.match(/,\s*n[ºo°.]?\s*(\d{1,5}[A-Z]?|S\/N)\s*$/i);if(mn){if(!d.numero)d.numero=mn[1];e=e.slice(0,mn.index)}r.endereco=e.trim()}
+  r.numero=d.numero;r.medidor=d.medidor?d.medidor.replace(/\s/g,'').toUpperCase():undefined;
+  r.leitura=d.leitura?d.leitura.split('/')[0].replace(/\D/g,''):undefined;
+  r.situacao=d.situacao?d.situacao.replace(/\s*\(.*\)\s*$/,''):undefined;
+  r.etapa=d.etapa?Number(d.etapa.replace(/\D/g,'')):undefined;r.obs=d.obs;
+ }else r=parsePDA(String(txt||''));
+ clearAutoFill();const got=[];
+ if(r.codigo){$('codigo').value=r.codigo;markAuto('codigo');got.push('código')}
+ if(r.endereco){$('endereco').value=corrigeEndereco(r.endereco);markAuto('endereco');got.push('endereço')}
+ if(r.numero){$('numero').value=r.numero;markAuto('numero');got.push('nº')}
+ if(r.medidor){$('medidor').value=r.medidor;markAuto('medidor');got.push('medidor')}
+ if(r.leitura){readings=[r.leitura];renderReadings();document.querySelector('.reading').classList.add('auto-filled');got.push('leitura')}
+ if(r.situacao){const op=[...$('situacao').options].find(o=>o.value&&normSit(o.value)===normSit(r.situacao));if(op){setSituation(op.value);markAuto('situacao');got.push('situação')}}
+ if(r.etapa>=1&&r.etapa<=18){stage=r.etapa;$('etapa').value=stage;$('calTag').classList.toggle('show',stage===etapaDoCalendario($('data').value||todayStr()));setView('etapa');got.push('etapa')}
+ if(r.obs){$('obs').value=r.obs;got.push('obs.')}
+ const msg=got.length?`Preenchido: ${got.join(', ')}. Confira e toque em 💾 para salvar.`:'Não achei dados no texto copiado. Copie o bloco inteiro e tente de novo.';
+ $('status').textContent=msg;$('status').style.color=got.length?'var(--blue)':'var(--red)';toast(msg,!got.length,5000);
+ if(got.length)window.scrollTo({top:0,behavior:'smooth'})
+}
+$('pasteBtn').onclick=async()=>{
+ let t='';
+ try{if(navigator.clipboard&&navigator.clipboard.readText)t=await navigator.clipboard.readText()}catch(_){}
+ if(!t)t=prompt('Cole aqui o texto copiado:')||'';
+ if(t.trim())preencherDeTexto(t)
+};
 $('pdaInput').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)readPDA(f)};
 $('cancelEdit').onclick=()=>{resetForm();$('status').textContent='Edição cancelada.';$('status').style.color='var(--muted)'};
 $('previews').addEventListener('click',ev=>{
