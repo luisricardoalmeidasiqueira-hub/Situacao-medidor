@@ -138,7 +138,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 .addr-line{font-size:12.5px}
 .sem-end{color:#b45f06;cursor:pointer}
 .record.unsent{background:#fffaf3;border-top-color:#f5d9b8;border-right-color:#f5d9b8;border-bottom-color:#f5d9b8}
-.unsent-chip{display:inline-flex;align-items:center;gap:5px;background:#fff1e3;color:#b45f06;border:1px solid #f5c79a;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:900;margin-right:6px}
+.unsent-chip{cursor:pointer;display:inline-flex;align-items:center;gap:5px;background:#fff1e3;color:#b45f06;border:1px solid #f5c79a;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:900;margin-right:6px}
 .unsent-chip i{width:8px;height:8px;border-radius:50%;background:#f08a24;display:inline-block}
 .record.sent{background:#f1faf4;border-top-color:#bfe5cf;border-right-color:#bfe5cf;border-bottom-color:#bfe5cf}
 .sent-chip{display:inline-block;background:#e3f5ea;color:#1f8a4c;border:1px solid #bfe5cf;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:900;margin-right:6px;cursor:pointer}
@@ -262,7 +262,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='5.0',APP_DATE='30/10/2026';
+const APP_VERSION='5.1',APP_DATE='30/10/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -402,7 +402,7 @@ function renderRecords(){
  ${info?`<div class="meta">${info}</div>`:''}
  ${e.obs?`<div class="meta">Obs.: ${esc(e.obs)}</div>`:''}
  ${e.fotos?.length?`<div class="previews">${e.fotos.map(x=>`<img src="${x}" alt="Foto do registro">`).join('')}</div>`:''}
- <div class="meta small">${env?`<span class="sent-chip" onclick="toggleEnviado('${esc(e.id)}')">📤 Enviado${e.enviadoSemData?'':' '+esc(fmtDateTime(e.enviadoEm).slice(0,5))}</span>`:(e.resolvido?'':`<span class="unsent-chip"><i></i>Não enviado</span>`)}${reg}</div>
+ <div class="meta small">${env?`<span class="sent-chip" onclick="toggleEnviado('${esc(e.id)}')">📤 Enviado${e.enviadoSemData?'':' '+esc(fmtDateTime(e.enviadoEm).slice(0,5))}</span>`:(e.resolvido?'':`<span class="unsent-chip" onclick="toggleEnviado('${esc(e.id)}')"><i></i>Não enviado</span>`)}${reg}</div>
  <div class="record-actions"><button class="edit" type="button" onclick="editEntry('${esc(e.id)}')"><b>✏️</b>Editar</button>
  ${e.resolvido||viewMode==='esteMes'?'':`<button class="again" type="button" onclick="relaunch('${esc(e.id)}')"><b>${viewMode==='mes'?'➡️':'🔁'}</b>${viewMode==='mes'?'Passar':'Lançar'}</button>`}
  <button class="resolve" type="button" onclick="toggleResolved('${esc(e.id)}')"><b>${e.resolvido?'↩️':'✅'}</b>${e.resolvido?'Reabrir':'Resolver'}</button>
@@ -518,6 +518,7 @@ function marcarEnviados(lista){const t=Date.now();lista.forEach(e=>{e.enviadoEm=
 window.toggleEnviado=id=>{
  const e=entries.find(x=>x.id===id);if(!e)return;
  if(isEnviado(e)){if(!confirm('Desmarcar como enviado?'))return;delete e.enviadoEm;delete e.enviadoSemData;saveData();renderRecords()}
+ else{if(!confirm('Marcar como enviado? (ex.: você mandou por fora do app)'))return;marcarEnviados([e]);toast('Marcado como enviado.')}
 };
 function addLancamento(e,data){
  e.lancamentos=lancs(e);
