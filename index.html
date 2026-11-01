@@ -262,7 +262,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='5.1',APP_DATE='30/10/2026';
+const APP_VERSION='5.3',APP_DATE='01/11/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -366,16 +366,16 @@ function mesAtual(){return todayStr().slice(0,7)}
 function mesPassado(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function pendentesMesPassado(){
  const ant=mesPassado(),cur=mesAtual();
- return entries.filter(e=>!e.resolvido&&mesesDe(e).includes(ant)&&!mesesDe(e).includes(cur))
+ return entries.filter(e=>!e.resolvido&&mesesDe(e).includes(ant)&&(!mesesDe(e).includes(cur)||e.autoMes===cur))
 }
 function renderRecords(){
  renderStages();
  const pend=pendentesMesPassado();
- $('mesDot').classList.toggle('show',pend.length>0);
+ $('mesDot').classList.toggle('show',pend.some(e=>!isEnviado(e)));
  let filtered;
  if(viewMode==='esteMes'){
   const cur=mesAtual();
-  filtered=entries.filter(e=>mesesDe(e).includes(cur)).sort((a,b)=>(Number(a.etapa)-Number(b.etapa))||((b.ultimoLanc||b.criadoEm||0)-(a.ultimoLanc||a.criadoEm||0)));
+  filtered=entries.filter(e=>mesesDe(e).includes(cur)&&e.autoMes!==cur).sort((a,b)=>(Number(a.etapa)-Number(b.etapa))||((b.ultimoLanc||b.criadoEm||0)-(a.ultimoLanc||a.criadoEm||0)));
   $('recTitle').textContent=`Lançados em ${fmtMes(cur)}`;
  }else if(viewMode==='mes'){
   filtered=pend.sort((a,b)=>(Number(a.etapa)-Number(b.etapa))||((b.ultimoLanc||b.criadoEm||0)-(a.ultimoLanc||a.criadoEm||0)));
@@ -404,7 +404,7 @@ function renderRecords(){
  ${e.fotos?.length?`<div class="previews">${e.fotos.map(x=>`<img src="${x}" alt="Foto do registro">`).join('')}</div>`:''}
  <div class="meta small">${env?`<span class="sent-chip" onclick="toggleEnviado('${esc(e.id)}')">📤 Enviado${e.enviadoSemData?'':' '+esc(fmtDateTime(e.enviadoEm).slice(0,5))}</span>`:(e.resolvido?'':`<span class="unsent-chip" onclick="toggleEnviado('${esc(e.id)}')"><i></i>Não enviado</span>`)}${reg}</div>
  <div class="record-actions"><button class="edit" type="button" onclick="editEntry('${esc(e.id)}')"><b>✏️</b>Editar</button>
- ${e.resolvido||viewMode==='esteMes'?'':`<button class="again" type="button" onclick="relaunch('${esc(e.id)}')"><b>${viewMode==='mes'?'➡️':'🔁'}</b>${viewMode==='mes'?'Passar':'Lançar'}</button>`}
+ ${e.resolvido||viewMode==='esteMes'||(viewMode==='mes'&&mesesDe(e).includes(mesAtual()))?'':`<button class="again" type="button" onclick="relaunch('${esc(e.id)}')"><b>${viewMode==='mes'?'➡️':'🔁'}</b>${viewMode==='mes'?'Passar':'Lançar'}</button>`}
  <button class="resolve" type="button" onclick="toggleResolved('${esc(e.id)}')"><b>${e.resolvido?'↩️':'✅'}</b>${e.resolvido?'Reabrir':'Resolver'}</button>
  <button class="share" type="button" onclick="shareEntry('${esc(e.id)}')"><b>📤</b>Enviar</button>
  <button class="delete" type="button" onclick="deleteEntry('${esc(e.id)}')"><b>🗑️</b>Excluir</button></div>
@@ -428,7 +428,7 @@ window.relaunch=id=>{
  const hoje=todayStr(),mes=hoje.slice(0,7);
  if(mesesDe(e).includes(mes)){alert('Este medidor já foi lançado neste mês ('+fmtMes(mes)+').');return}
  if(!confirm(`Passar o medidor ${e.medidor} para ${fmtMes(mes)}? (continua pendente)`))return;
- addLancamento(e,hoje);saveData();renderRecords();
+ addLancamento(e,hoje);delete e.passadoAuto;delete e.autoMes;saveData();renderRecords();
  $('status').textContent=`Passado para ${fmtMes(mes)}. Já são ${mesesDe(e).length} meses sem resolver.`;$('status').style.color='var(--blue)'
 };
 function textoRegistro(e){
@@ -500,18 +500,43 @@ function consertoEnviados43(){
   let n=0;entries.forEach(e=>{if(e.enviadoSemData&&e.passadoAuto&&!isEnviado(e)&&mesesDe(e).includes('2026-10')){e.enviadoEm=e.ultimoLanc;n++}});
   localStorage.setItem('situacao-medidor-fix-43','1');if(n)saveData()}catch(_){}
 }
+/* dia da etapa no mês, pelo calendário de leitura (ex.: etapa 18 em nov/26 = 26/11) */
+function dataDaEtapa(etapa,ym){const d=(CALENDARIO[ym]||[])[Number(etapa)-1];return d?ym+'-'+String(d).padStart(2,'0'):null}
+/* passa o pendente para o mês novo só quando chega o dia da etapa dele, com a data do calendário */
 function passarAutomatico(){
- const cur=mesAtual(),hoje=todayStr();let n=0;
+ const cur=mesAtual();let n=0;
  entries.forEach(e=>{
   if(e.resolvido)return;
   const ms=mesesDe(e);if(!ms.length)return;
   let ult=ms[ms.length-1];if(ult>=cur)return;
-  const jaEnviadoAntes=e.enviadoSemData&&isEnviado(e);
-  while(ult<cur){ult=proxMes(ult);addLancamento(e,ult===cur?hoje:ult+'-01')}
-  if(jaEnviadoAntes&&cur==='2026-10')e.enviadoEm=e.ultimoLanc;
-  e.passadoAuto=true;n++
+  const dataLeitura=e.data;
+  while(ult<cur){ult=proxMes(ult);addLancamento(e,ult+'-01')}
+  e.data=dataLeitura;e.autoMes=cur;e.passadoAuto=true;n++
  });
- if(n){saveData();renderRecords();setTimeout(()=>toast(`Pendentes passados sozinhos para ${fmtMes(cur)}.`,false,5000),400)}
+ if(n){saveData();renderRecords();setTimeout(()=>toast(`Pendentes passados sozinhos para ${fmtMes(cur)}. Estão na aba 📅 Mês passado.`,false,5000),400)}
+}
+/* conserto da 5.1: a data tinha virado 01/11 (dia sem leitura) — volta para a data real da leitura */
+function consertaData51(){
+ try{if(localStorage.getItem('situacao-medidor-fix-53b'))return;let n=0;
+  entries.forEach(e=>{if(!e.passadoAuto)return;const ls=lancs(e);if(ls.length<2)return;const ult=ls[ls.length-1];
+   if(/-01$/.test(ult)&&e.data===ult){e.data=ls[ls.length-2];n++}
+   if(/-01$/.test(ult)&&!e.autoMes)e.autoMes=ult.slice(0,7)});
+  localStorage.setItem('situacao-medidor-fix-53b','1');if(n)saveData()}catch(_){}
+}
+/* conserto: desfaz o que a 4.3–5.1 passou antes do dia da etapa (ex.: lançado em 01/11 sem ser dia de leitura) */
+function desfazPassadoCedo(){
+ try{if(localStorage.getItem('situacao-medidor-fix-53'))return;
+  let n=0;
+  entries.forEach(e=>{
+   if(e.resolvido||!e.passadoAuto)return;
+   const ls=lancs(e);if(ls.length<2||ls[ls.length-1].slice(0,7)!==mesAtual())return;
+   const estavaEnviado=isEnviado(e)||!!e.enviadoEm;
+   ls.pop();e.lancamentos=ls;e.data=ls[ls.length-1];
+   if(estavaEnviado)e.ultimoLanc=Math.min(e.ultimoLanc||Date.now(),e.enviadoEm||Date.now());
+   delete e.autoMes;delete e.passadoAuto;n++
+  });
+  localStorage.setItem('situacao-medidor-fix-53','1');if(n)saveData()
+ }catch(_){}
 }
 function isEnviado(e){return !!e.enviadoEm&&e.enviadoEm>=(e.ultimoLanc||e.criadoEm||0)}
 function marcarEnviados(lista){const t=Date.now();lista.forEach(e=>{e.enviadoEm=t;delete e.enviadoSemData});saveData();renderRecords()}
@@ -994,8 +1019,9 @@ try{$('apontador').value=localStorage.getItem(KEY_APONTADOR)||''}catch(e){}
 $('apontador').addEventListener('input',e=>{try{localStorage.setItem(KEY_APONTADOR,e.target.value.trim())}catch(_){}});
 loadData();renderStages();renderReadings();$('data').value=todayStr();aplicarCalendario();renderRecords();
 $('data').addEventListener('change',aplicarCalendario);
-consertoEnviados43();passarAutomatico();renderRecords();
+consertoEnviados43();consertaData51();passarAutomatico();renderRecords();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')passarAutomatico()});
+
 </script>
 </body>
 </html>
