@@ -262,7 +262,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='5.3',APP_DATE='01/11/2026';
+const APP_VERSION='5.4',APP_DATE='02/11/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -346,14 +346,20 @@ const CAL_LIST=Object.entries(CALENDARIO).flatMap(([ym,dias])=>dias.map((d,i)=>(
 function etapaDoCalendario(data){
  let achou=null;for(const c of CAL_LIST){if(c.data<=data)achou=c;else break}
  if(!achou)return null;
+ /* virou o mês e a 1ª leitura do mês ainda não chegou: não usa a etapa do mês passado */
+ if(achou.data.slice(0,7)!==data.slice(0,7))return null;
  const dias=(new Date(data+'T12:00')-new Date(achou.data+'T12:00'))/864e5;
  return dias<=10?achou.etapa:null
 }
+function proximaLeitura(data){const c=CAL_LIST.find(c=>c.data>data);if(!c)return null;const dias=(new Date(c.data+'T12:00')-new Date(data+'T12:00'))/864e5;return dias<=10?c:null}
 function aplicarCalendario(){
  if(editingId)return;
- const e=etapaDoCalendario($('data').value||todayStr());
- $('calTag').classList.toggle('show',!!e);
- if(e&&e!==stage){stage=e;$('etapa').value=e;if(viewMode==='etapa')renderRecords()}
+ const dt=$('data').value||todayStr(),e=etapaDoCalendario(dt),prox=e?null:proximaLeitura(dt);
+ const tag=$('calTag');
+ tag.textContent=e?'📅 pelo calendário':prox?`📅 próxima leitura ${fmtDate(prox.data).slice(0,5)}`:'📅 pelo calendário';
+ tag.classList.toggle('show',!!(e||prox));
+ const alvo=e||(prox&&prox.etapa);
+ if(alvo&&alvo!==stage){stage=alvo;$('etapa').value=alvo;if(viewMode==='etapa')renderRecords()}
 }
 function resetForm(){
  $('codigo').value='';$('endereco').value='';$('numero').value='';$('medidor').value='';readings=[''];renderReadings();
