@@ -262,7 +262,7 @@ border-radius:14px;padding:11px;margin-bottom:8px}
 </main>
 
 <script>
-const APP_VERSION='5.4',APP_DATE='02/11/2026';
+const APP_VERSION='5.6',APP_DATE='12/11/2026';
 const KEY_APONTADOR='situacao-medidor-apontador';
 const KEY='situacao-medidor-entries-v2';
 let editingId=null,entries=[],selectedSituacao='',selectedFotos=[],readings=[''],stage=1;
@@ -832,6 +832,60 @@ const PREF_BAIRRO=['jardim','jd','vila','vl','parque','pq','residencial','res','
 const PREF_RUA=/^(rua|avenida|av|travessa|tv|alameda|estrada|rodovia|praca|largo|viela|rod|al|est)\b/;
 function dist(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let prev=Array.from({length:n+1},(_,i)=>i);for(let i=1;i<=m;i++){const cur=[i];for(let j=1;j<=n;j++)cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));prev=cur}return prev[n]}
 /* compara com bairros/ruas já salvos: se for quase igual, usa o que já existe */
+/* ===== Reconhecer o mesmo cliente mesmo com leitura errada (zero a menos, "M" lido como "14"...) ===== */
+function chaveCod(c){return String(c||'').replace(/\D/g,'').replace(/^0+/,'')}
+function normMed(m){return String(m||'').toUpperCase().replace(/[^A-Z0-9]/g,'')}
+function medValido(m){return /^[A-Z][0-9]{7,9}$/.test(normMed(m))}
+function medParecido(a,b){
+ a=normMed(a);b=normMed(b);if(!a||!b)return false;if(a===b)return true;
+ const da=a.replace(/^[A-Z]+|^14(?=\d{8}$)/,''),db=b.replace(/^[A-Z]+|^14(?=\d{8}$)/,'');
+ if(da.length>=7&&da===db)return true;
+ return Math.min(a.length,b.length)>=7&&dist(a,b)<=2&&dist(da,db)<=1
+}
+function codParecido(a,b){const x=chaveCod(a),y=chaveCod(b);return x.length>=6&&x===y}
+function ruaNum(e){return normTxt(String(e.endereco||'').split(' – ')[0]).replace(/^(rua|r|avenida|av|travessa|tv) /,'')+'|'+String(e.numero||'').trim()}
+/* números do medidor sem a letra da frente (ou o "14" que o 📟 lê no lugar do "M") */
+function medNum(m){const t=normMed(m);return t.replace(/^[A-Z]+/,'').replace(/^14(?=\d{8}$)/,'')}
+function mesmoCliente(x,n){
+ if(codParecido(x.codigo,n.codigo))return true;
+ const a=medNum(x.medidor),b=medNum(n.medidor);
+ /* medidor é único: mesmos números = mesmo cliente */
+ if(a.length>=6&&a===b)return true;
+ /* mesmo endereço e nº + mesmos 4 últimos números do medidor */
+ const rx=ruaNum(x),rn=ruaNum(n);
+ if(rx.length>3&&!/\|$/.test(rx)&&rx===rn&&a.length>=4&&b.length>=4&&a.slice(-4)===b.slice(-4))return true;
+ return false
+}
+function juntarRegistros(base,outro){
+ const enviadoAmbos=isEnviado(base)&&isEnviado(outro);
+ const [velho,novo]=(base.ultimoLanc||base.criadoEm||0)<=(outro.ultimoLanc||outro.criadoEm||0)?[base,outro]:[outro,base];
+ base.lancamentos=[...new Set(lancs(base).concat(lancs(outro)))].sort();
+ base.data=[base.data,outro.data].filter(Boolean).sort().pop();
+ base.ultimoLanc=Math.max(base.ultimoLanc||base.criadoEm||0,outro.ultimoLanc||outro.criadoEm||0);
+ base.criadoEm=Math.min(base.criadoEm||Date.now(),outro.criadoEm||Date.now());
+ if(!medValido(base.medidor)&&medValido(outro.medidor))base.medidor=outro.medidor;
+ const cs=[base.codigo,outro.codigo].filter(Boolean);base.codigo=cs.find(c=>String(c).length===15)||cs.sort((a,b)=>String(b).length-String(a).length)[0]||base.codigo;
+ if(String(outro.endereco||'').length>String(base.endereco||'').length)base.endereco=outro.endereco;
+ base.numero=base.numero||outro.numero;
+ base.situacao=novo.situacao||velho.situacao;base.etapa=novo.etapa||velho.etapa;
+ if((novo.leituras||[]).length)base.leituras=novo.leituras;
+ base.obs=[...new Set([velho.obs,novo.obs].filter(Boolean))].join(' · ');
+ base.fotos=(base.fotos||[]).concat(outro.fotos||[]);
+ if(enviadoAmbos)base.enviadoEm=Math.max(base.enviadoEm||0,outro.enviadoEm||0);else{delete base.enviadoEm;delete base.enviadoSemData}
+ if(base.autoMes&&!(outro.autoMes===base.autoMes))delete base.autoMes;
+ return base
+}
+/* junta sozinho os registros repetidos do mesmo cliente que ainda estão pendentes */
+function juntarRepetidos(){
+ let n=0;
+ for(let i=0;i<entries.length;i++){const a=entries[i];if(a.resolvido)continue;
+  for(let j=entries.length-1;j>i;j--){const b=entries[j];if(b.resolvido||!mesmoCliente(a,b))continue;
+   const [base,outro]=(a.criadoEm||0)<=(b.criadoEm||0)?[a,b]:[b,a];
+   juntarRegistros(base,outro);entries.splice(entries.indexOf(outro),1);n++;if(outro===a){i--;break}
+  }}
+ if(n){saveData();setTimeout(()=>toast(n===1?'Juntei 1 lançamento repetido do mesmo cliente.':`Juntei ${n} lançamentos repetidos.`,false,5000),600)}
+ return n
+}
 function parecidoConhecido(t,tipo){
  const k=normTxt(t);if(k.length<5)return null;
  const conta={};
@@ -894,9 +948,11 @@ async function readPDA(files){
   $('pdaText').textContent=texts.map((t,i)=>(files.length>1&&i%2===0?`— Foto ${i/2+1} —\n`:'')+t.trim()).join('\n\n')||'(nenhum texto encontrado)';$('pdaRaw').style.display='block';
   const r=mergePDA(texts.map(parsePDA)),got=[];
   /* se o medidor já está salvo no app, completa o que a foto não leu direito */
-  const conhecido=r.medidor&&entries.find(e=>String(e.medidor||'').toUpperCase()===r.medidor);
+  const conhecido=(r.medidor||r.codigo)&&(entries.find(e=>String(e.medidor||'').toUpperCase()===r.medidor)||entries.find(e=>mesmoCliente(e,r)));
   if(conhecido){
    if(conhecido.codigo&&(!r.codigo||r.codigo.length!==String(conhecido.codigo).length))r.codigo=conhecido.codigo;
+   if(medValido(conhecido.medidor)&&!medValido(r.medidor))r.medidor=conhecido.medidor;
+   if(conhecido.endereco&&r.endereco&&conhecido.endereco.length>r.endereco.length&&normTxt(conhecido.endereco).startsWith(normTxt(r.endereco).split(' – ')[0]))r.endereco=conhecido.endereco;
    if(conhecido.endereco&&!r.endereco)r.endereco=conhecido.endereco;
    if(conhecido.numero&&!r.numero)r.numero=conhecido.numero;
   }
@@ -995,18 +1051,18 @@ $('saveBtn').onclick=()=>{
   $('status').textContent='Alterações salvas.';$('status').style.color='var(--blue)';return
  }
  const dataL=$('data').value||todayStr(),norm=v=>String(v||'').replace(/\s/g,'').toUpperCase();
- const ant=entries.find(x=>!x.resolvido&&((norm(x.medidor)&&norm(x.medidor)===norm(medidor))||(norm(x.codigo)&&norm(x.codigo)===norm(codigo))));
+ const ant=entries.find(x=>!x.resolvido&&((norm(x.medidor)&&norm(x.medidor)===norm(medidor))||(norm(x.codigo)&&norm(x.codigo)===norm(codigo))||mesmoCliente(x,{codigo,medidor})));
  if(ant){
   const msAnt=mesesDe(ant).map(fmtMes).join(', '),mesmoMes=mesesDe(ant).includes(dataL.slice(0,7));
   const msg=mesmoMes
    ?`Esse medidor/código já foi lançado neste mês (${msAnt}) e está pendente. Atualizar o registro que já existe?`
    :`Esse medidor/código já foi lançado em ${msAnt} e ainda não foi resolvido. Contar mais este mês no mesmo registro?`;
   if(confirm(msg)){
-   Object.assign(ant,{codigo,endereco:endereco||ant.endereco,numero:numero||ant.numero,medidor,
+   Object.assign(ant,{codigo:(String(codigo).length===15||!ant.codigo)?codigo:ant.codigo,endereco:(endereco&&endereco.length>=String(ant.endereco||'').length)?endereco:ant.endereco,numero:numero||ant.numero,medidor:(medValido(medidor)||!medValido(ant.medidor))?medidor:ant.medidor,
     leituras:leituras.length?leituras:ant.leituras,situacao:selectedSituacao,etapa:stage,
     obs:$('obs').value.trim()||ant.obs,fotos:(ant.fotos||[]).concat(selectedFotos),
     editadoEm:Date.now(),editadoPor:apontadoPor});
-   addLancamento(ant,dataL);saveData();resetForm();renderRecords();
+   addLancamento(ant,dataL);delete ant.autoMes;saveData();resetForm();renderRecords();
    const n=mesesDe(ant).length;
    $('status').textContent=n>1?`Somado ao registro. Já são ${n} meses sem resolver.`:'Registro atualizado.';$('status').style.color='var(--blue)';return
   }
@@ -1025,7 +1081,7 @@ try{$('apontador').value=localStorage.getItem(KEY_APONTADOR)||''}catch(e){}
 $('apontador').addEventListener('input',e=>{try{localStorage.setItem(KEY_APONTADOR,e.target.value.trim())}catch(_){}});
 loadData();renderStages();renderReadings();$('data').value=todayStr();aplicarCalendario();renderRecords();
 $('data').addEventListener('change',aplicarCalendario);
-consertoEnviados43();consertaData51();passarAutomatico();renderRecords();
+consertoEnviados43();consertaData51();juntarRepetidos();passarAutomatico();renderRecords();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')passarAutomatico()});
 
 </script>
